@@ -92,6 +92,18 @@ resource "aws_iam_role_policy" "github_actions" {
         Resource = "arn:aws:iam::${var.account_id}:role/lacrei-desafio-*"
       },
       {
+        Sid      = "OidcProviderReadOnly"
+        Effect   = "Allow"
+        Action   = ["iam:ListOpenIDConnectProviders"]
+        Resource = "*"
+      },
+      {
+        Sid      = "OidcProviderGet"
+        Effect   = "Allow"
+        Action   = ["iam:GetOpenIDConnectProvider"]
+        Resource = "arn:aws:iam::${var.account_id}:oidc-provider/token.actions.githubusercontent.com"
+      },
+      {
         Sid    = "TerraformStateBucket"
         Effect = "Allow"
         Action = [
