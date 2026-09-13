@@ -20,8 +20,12 @@ resource "aws_iam_role" "github_actions" {
           }
           # Restrito ao repo E ao branch main - nenhum PR de fora, nenhum outro
           # branch, consegue assumir esta role.
+          # IMPORTANTE: o GitHub inclui IDs imutaveis de owner/repo no sub claim
+          # (repo:owner@ownerId/repo@repoId:ref:...), nao so os nomes. Confirmado
+          # via CloudTrail (evento AssumeRoleWithWebIdentity real, errorCode
+          # AccessDenied) - o formato so-nome nao bate mais com o token emitido.
           StringLike = {
-            "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/${var.github_branch}"
+            "token.actions.githubusercontent.com:sub" = "repo:${var.github_owner}@${var.github_owner_id}/${var.github_repo_name}@${var.github_repo_id}:ref:refs/heads/${var.github_branch}"
           }
         }
       }
@@ -81,7 +85,9 @@ resource "aws_iam_role_policy" "github_actions" {
           "iam:GetRolePolicy",
           "iam:ListRolePolicies",
           "iam:ListAttachedRolePolicies",
-          "iam:TagRole"
+          "iam:TagRole",
+          "iam:ListInstanceProfilesForRole",
+          "iam:UpdateAssumeRolePolicy"
         ]
         Resource = "arn:aws:iam::${var.account_id}:role/lacrei-desafio-*"
       },

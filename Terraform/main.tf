@@ -36,7 +36,10 @@ module "ecs_cluster" {
 module "github_oidc" {
   source = "./modules/github-oidc"
 
-  github_repo             = "LeaoAndre3107/Desafio_Tecnico_Lacrei_Saude"
+  github_owner      = "LeaoAndre3107"
+  github_owner_id   = "119906272"
+  github_repo_name  = "Desafio_Tecnico_Lacrei_Saude"
+  github_repo_id    = "1367803676"
   github_branch           = "main"
   account_id              = data.aws_caller_identity.current.account_id
   terraform_state_bucket  = "lacrei-desafio-terraform-state"

@@ -1,5 +1,20 @@
-variable "github_repo" {
-  description = "owner/repo do GitHub, ex: LeaoAndre3107/Desafio_Tecnico_Lacrei_Saude"
+variable "github_owner" {
+  description = "Owner/organização do repo no GitHub, ex: LeaoAndre3107"
+  type        = string
+}
+
+variable "github_owner_id" {
+  description = "ID numerico imutavel do owner (obtido via API: /users/<owner> -> id, ou visto no sub claim real via CloudTrail)"
+  type        = string
+}
+
+variable "github_repo_name" {
+  description = "Nome do repositorio, ex: Desafio_Tecnico_Lacrei_Saude"
+  type        = string
+}
+
+variable "github_repo_id" {
+  description = "ID numerico imutavel do repositorio (obtido via API: /repos/<owner>/<repo> -> id, ou visto no sub claim real via CloudTrail)"
   type        = string
 }
 

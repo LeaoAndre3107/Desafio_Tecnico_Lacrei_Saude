@@ -70,6 +70,11 @@ resource "aws_ecr_repository" "this" {
   name                 = each.value
   image_tag_mutability = "IMMUTABLE"
 
+  # force_delete: aceitável aqui porque é ambiente de portfólio/teste, onde
+  # o destroy/apply se repete. NAO faria isso num ECR de produção real -
+  # lá, um destroy acidental apagando imagens em uso seria grave.
+  force_delete = true
+
   image_scanning_configuration {
     scan_on_push = true
   }

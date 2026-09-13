@@ -47,7 +47,9 @@
         "iam:GetRolePolicy",
         "iam:ListRolePolicies",
         "iam:ListAttachedRolePolicies",
-        "iam:TagRole"
+        "iam:TagRole",
+        "iam:ListInstanceProfilesForRole",
+        "iam:UpdateAssumeRolePolicy"
       ],
       "Resource": "arn:aws:iam::<AWS_ACCOUNT_ID>:role/lacrei-desafio-*"
     },
@@ -66,6 +68,14 @@
         "iam:GetOpenIDConnectProvider"
       ],
       "Resource": "arn:aws:iam::<AWS_ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"
+    },
+    {
+      "Sid": "CloudTrailReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "cloudtrail:LookupEvents"
+      ],
+      "Resource": "*"
     },
     {
       "Sid": "TerraformStateBucket",
