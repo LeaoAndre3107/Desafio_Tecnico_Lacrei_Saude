@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.9"
+  required_version = ">= 1.10"
 
   backend "s3" {
     bucket       = "lacrei-desafio-terraform-state"
