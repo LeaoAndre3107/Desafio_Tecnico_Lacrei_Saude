@@ -1,0 +1,18 @@
+# Terraform
+Terraform/.terraform/
+Terraform/*.tfstate
+Terraform/*.tfstate.*
+Terraform/terraform.tfvars
+Terraform/*.tfplan
+Terraform/iam/lacrei-desafio-policy.json
+crash.log
+crash.*.log
+
+# Node / app
+app/node_modules/
+app/npm-debug.log*
+
+# SO / editor
+.DS_Store
+Thumbs.db
+.vscode/
