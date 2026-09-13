@@ -1,5 +1,6 @@
 const express = require('express');
 
+// App de health-check do desafio tecnico Lacrei Saude
 const app = express();
 const PORT = process.env.PORT || 3000;
 const APP_PREFIX = process.env.APP_PREFIX || '';
