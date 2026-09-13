@@ -21,8 +21,6 @@ const server = app.listen(PORT, () => {
   console.log(`Servidor escutando na porta ${PORT}`);
 });
 
-// Graceful shutdown - importante em ECS/EKS: o orquestrador manda SIGTERM
-// antes de matar o container e espera o processo encerrar sozinho.
 process.on('SIGTERM', () => {
   console.log('SIGTERM recebido, encerrando servidor...');
   server.close(() => {
