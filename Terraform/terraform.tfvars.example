@@ -1,1 +1,2 @@
-my_ip = "SEU.IP.PUBLICO.AQUI/32"
+# Nenhuma variável obrigatória no momento - todas têm default.
+# Arquivo mantido para extensibilidade futura (ex: restringir acesso por IP).

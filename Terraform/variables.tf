@@ -16,11 +16,6 @@ variable "azs" {
   default     = ["us-east-1a", "us-east-1b"]
 }
 
-variable "my_ip" {
-  description = "Seu IP público/32, usado onde for preciso restringir acesso administrativo"
-  type        = string
-}
-
 variable "devops_image_tag" {
   description = "Tag da imagem devops-app a deployar (o pipeline sobrescreve isso com o SHA do commit)"
   type        = string

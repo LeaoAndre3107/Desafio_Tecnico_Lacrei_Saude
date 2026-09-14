@@ -57,7 +57,6 @@ jobs:
         working-directory: Terraform
         env:
           TF_VAR_devops_image_tag: ${{ github.sha }}
-          TF_VAR_my_ip: "0.0.0.0/32"
         run: terraform apply -auto-approve
 
       - name: Validar deploy
