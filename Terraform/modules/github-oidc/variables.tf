@@ -24,6 +24,12 @@ variable "github_branch" {
   default     = "main"
 }
 
+variable "github_production_environment" {
+  description = "Nome do GitHub Environment usado pelo job de producao (sub claim muda de formato quando o job declara `environment:`)"
+  type        = string
+  default     = "production"
+}
+
 variable "account_id" {
   description = "Account ID da AWS"
   type        = string

@@ -18,14 +18,21 @@ resource "aws_iam_role" "github_actions" {
           StringEquals = {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
           }
-          # Restrito ao repo E ao branch main - nenhum PR de fora, nenhum outro
-          # branch, consegue assumir esta role.
+          # Restrito ao repo E (branch main OU job com environment: production)
+          # - nenhum PR de fora, nenhum outro branch/environment, consegue
+          # assumir esta role.
           # IMPORTANTE: o GitHub inclui IDs imutaveis de owner/repo no sub claim
           # (repo:owner@ownerId/repo@repoId:ref:...), nao so os nomes. Confirmado
-          # via CloudTrail (evento AssumeRoleWithWebIdentity real, errorCode
-          # AccessDenied) - o formato so-nome nao bate mais com o token emitido.
+          # via CloudTrail. Alem disso, um job que declara `environment:` no
+          # workflow gera um sub DIFERENTE do formato ref:refs/heads/... - vira
+          # `repo:.../...:environment:<nome>` em vez de incluir o branch. Os
+          # dois formatos precisam estar cobertos aqui (tambem confirmado via
+          # CloudTrail, nao documentacao).
           StringLike = {
-            "token.actions.githubusercontent.com:sub" = "repo:${var.github_owner}@${var.github_owner_id}/${var.github_repo_name}@${var.github_repo_id}:ref:refs/heads/${var.github_branch}"
+            "token.actions.githubusercontent.com:sub" = [
+              "repo:${var.github_owner}@${var.github_owner_id}/${var.github_repo_name}@${var.github_repo_id}:ref:refs/heads/${var.github_branch}",
+              "repo:${var.github_owner}@${var.github_owner_id}/${var.github_repo_name}@${var.github_repo_id}:environment:${var.github_production_environment}"
+            ]
           }
         }
       }
