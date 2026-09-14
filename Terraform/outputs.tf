@@ -18,8 +18,22 @@ output "ecr_repository_urls" {
   value = module.ecs_cluster.ecr_repository_urls
 }
 
-output "devops_app_url" {
-  value = "http://${module.ecs_cluster.alb_dns_name}/devops/status"
+output "devops_staging_url" {
+  value = "http://${module.ecs_cluster.alb_dns_name}/devops/staging/status"
+}
+
+output "devops_production_url" {
+  value = "http://${module.ecs_cluster.alb_dns_name}/devops/production/status"
+}
+
+output "devops_staging_image_tag" {
+  description = "Tag atualmente aplicada em staging - o pipeline le isso antes de aplicar mudanca em produção"
+  value       = module.ecs_service_devops_staging.image_tag
+}
+
+output "devops_production_image_tag" {
+  description = "Tag atualmente aplicada em producao"
+  value       = module.ecs_service_devops_production.image_tag
 }
 
 output "github_actions_role_arn" {

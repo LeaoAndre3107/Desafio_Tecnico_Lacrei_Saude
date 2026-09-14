@@ -50,10 +50,10 @@ module "github_oidc" {
   }
 }
 
-module "ecs_service_devops" {
+module "ecs_service_devops_staging" {
   source = "./modules/ecs-service"
 
-  service_name = "devops-app"
+  service_name = "devops-app-staging"
 
   vpc_id                 = module.network.vpc_id
   private_subnet_ids     = module.network.private_subnet_ids
@@ -61,14 +61,39 @@ module "ecs_service_devops" {
   alb_security_group_id  = module.ecs_cluster.alb_security_group_id
   alb_listener_arn       = module.ecs_cluster.alb_listener_arn
   listener_rule_priority = 10
-  path_pattern            = "/devops/*"
-  app_prefix              = "/devops"
+  path_pattern            = "/devops/staging/*"
+  app_prefix              = "/devops/staging"
 
   ecr_repository_url = module.ecs_cluster.ecr_repository_urls["devops-app"]
-  image_tag           = var.devops_image_tag
+  image_tag           = var.devops_staging_image_tag
 
   tags = {
-    Project = var.project_name
-    Managed = "terraform"
+    Project     = var.project_name
+    Managed     = "terraform"
+    Environment = "staging"
+  }
+}
+
+module "ecs_service_devops_production" {
+  source = "./modules/ecs-service"
+
+  service_name = "devops-app-production"
+
+  vpc_id                 = module.network.vpc_id
+  private_subnet_ids     = module.network.private_subnet_ids
+  cluster_id             = module.ecs_cluster.cluster_id
+  alb_security_group_id  = module.ecs_cluster.alb_security_group_id
+  alb_listener_arn       = module.ecs_cluster.alb_listener_arn
+  listener_rule_priority = 20
+  path_pattern            = "/devops/production/*"
+  app_prefix              = "/devops/production"
+
+  ecr_repository_url = module.ecs_cluster.ecr_repository_urls["devops-app"]
+  image_tag           = var.devops_production_image_tag
+
+  tags = {
+    Project     = var.project_name
+    Managed     = "terraform"
+    Environment = "production"
   }
 }

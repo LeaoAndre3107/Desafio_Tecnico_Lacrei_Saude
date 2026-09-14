@@ -9,7 +9,7 @@ on:
       - "Terraform/**"
       - ".github/workflows/deploy.yml"
 
-# Necessario para o step de OIDC conseguir pedir o token de identidade
+# Necessario para os steps de OIDC conseguirem pedir o token de identidade
 permissions:
   id-token: write
   contents: read
@@ -19,8 +19,14 @@ env:
   ECR_REPOSITORY: devops-app
 
 jobs:
-  deploy:
+  # Builda uma unica vez, testa o container isoladamente, e deploya em staging.
+  # A imagem validada aqui e a MESMA que sera promovida pra producao no job
+  # seguinte - nunca um rebuild novo, pra garantir que o que passou pelo teste
+  # e exatamente o que vai pro ambiente sensivel.
+  deploy-staging:
     runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ github.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,14 +41,44 @@ jobs:
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build e push da imagem
+      - name: Build da imagem
         working-directory: app
         env:
           REGISTRY: ${{ steps.ecr-login.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
+        run: docker build -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
+
+      - name: Teste minimo do container (smoke test)
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
-          docker push "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker run -d --name smoke-test \
+            -p 3000:3000 \
+            -e APP_PREFIX=/devops/staging \
+            "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+          # Espera o container responder antes de validar - nao e o mesmo
+          # ambiente da AWS (Fargate), entao o timing aqui e bem mais rapido
+          for i in $(seq 1 10); do
+            if curl -sf "http://localhost:3000/devops/staging/status"; then
+              echo "Container respondeu corretamente"
+              docker stop smoke-test
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Container nao respondeu - abortando antes de publicar"
+          docker logs smoke-test
+          docker stop smoke-test
+          exit 1
+
+      - name: Push da imagem (so depois do teste passar)
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: docker push "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -53,22 +89,77 @@ jobs:
         working-directory: Terraform
         run: terraform init
 
-      - name: Terraform apply
+      - name: Ler tag atual de producao
+        id: current-prod
+        working-directory: Terraform
+        run: |
+          TAG=$(terraform output -raw devops_production_image_tag 2>/dev/null || echo "")
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Terraform apply (staging)
         working-directory: Terraform
         env:
-          TF_VAR_devops_image_tag: ${{ github.sha }}
+          TF_VAR_devops_staging_image_tag: ${{ github.sha }}
+          TF_VAR_devops_production_image_tag: ${{ steps.current-prod.outputs.tag }}
         run: terraform apply -auto-approve
 
-      - name: Validar deploy
+      - name: Validar staging
         run: |
           ALB_DNS=$(cd Terraform && terraform output -raw alb_dns_name)
           for i in $(seq 1 15); do
-            if curl -sf "http://$ALB_DNS/devops/status"; then
-              echo "Health check OK na tentativa $i"
+            if curl -sf "http://$ALB_DNS/devops/staging/status"; then
+              echo "Staging OK na tentativa $i"
               exit 0
             fi
             echo "Tentativa $i falhou, aguardando 15s..."
             sleep 15
           done
-          echo "Health check falhou apos todas as tentativas"
+          echo "Health check de staging falhou apos todas as tentativas"
+          exit 1
+
+  # So roda apos aprovacao manual de um required reviewer configurado no
+  # ambiente "production" (Settings -> Environments no GitHub). Promove a
+  # MESMA tag ja validada em staging - nunca builda de novo.
+  promote-to-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar credenciais AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.7"
+
+      - name: Terraform init
+        working-directory: Terraform
+        run: terraform init
+
+      - name: Terraform apply (producao)
+        working-directory: Terraform
+        env:
+          TF_VAR_devops_staging_image_tag: ${{ needs.deploy-staging.outputs.image_tag }}
+          TF_VAR_devops_production_image_tag: ${{ needs.deploy-staging.outputs.image_tag }}
+        run: terraform apply -auto-approve
+
+      - name: Validar producao
+        run: |
+          ALB_DNS=$(cd Terraform && terraform output -raw alb_dns_name)
+          for i in $(seq 1 15); do
+            if curl -sf "http://$ALB_DNS/devops/production/status"; then
+              echo "Producao OK na tentativa $i"
+              exit 0
+            fi
+            echo "Tentativa $i falhou, aguardando 15s..."
+            sleep 15
+          done
+          echo "Health check de producao falhou apos todas as tentativas"
           exit 1

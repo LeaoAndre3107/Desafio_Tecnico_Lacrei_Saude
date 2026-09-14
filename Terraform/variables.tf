@@ -16,8 +16,12 @@ variable "azs" {
   default     = ["us-east-1a", "us-east-1b"]
 }
 
-variable "devops_image_tag" {
-  description = "Tag da imagem devops-app a deployar (o pipeline sobrescreve isso com o SHA do commit)"
+variable "devops_staging_image_tag" {
+  description = "Tag da imagem devops-app em staging. SEM DEFAULT DE PROPOSITO: sempre passar explicitamente (via -var ou TF_VAR_), nunca deixar um valor parado servir de default silencioso - ja causamos um rollback acidental assim nesta sessao."
   type        = string
-  default     = "v2"
+}
+
+variable "devops_production_image_tag" {
+  description = "Tag da imagem devops-app em producao. Promovida a partir de uma tag ja validada em staging, nunca de um novo build direto."
+  type        = string
 }
