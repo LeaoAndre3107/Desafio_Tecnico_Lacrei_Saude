@@ -366,6 +366,105 @@ AWS_PROFILE=lacrei-desafio aws sns list-subscriptions-by-topic \
 
 A subscription de e-mail precisa ser confirmada pelo link enviado pela AWS. Enquanto não for confirmada, seu ARN aparece como `PendingConfirmation` e as notificações não são entregues.
 
+## Erros encontrados e decisões técnicas
+
+Durante a implementação, alguns problemas reais exigiram correções no código, no pipeline e na operação da infraestrutura.
+
+| Problema | Causa | Decisão e solução |
+|---|---|---|
+| A reexecução do pipeline falhou no `docker push` | O ECR estava configurado com tags imutáveis e a imagem do mesmo SHA já havia sido publicada antes de uma falha posterior. | O workflow passou a consultar o ECR antes do push. Se a tag já existir, a imagem publicada é reutilizada. |
+| O Terraform ficou aguardando `alert_email` | A variável não possuía valor padrão e não havia sido enviada em uma execução do CI. | O e-mail passou a ser fornecido por `TF_VAR_alert_email` a partir do secret `ALERT_EMAIL`, com validação prévia no workflow. |
+| O state remoto ficou bloqueado | Uma execução de `plan` ou `apply` foi interrompida e o lock nativo do backend S3 permaneceu ativo. | Processos locais e workflows ativos passaram a ser verificados antes de usar `force-unlock`. O uso de `-lock=false` foi evitado. |
+| O teste com zero tasks produziu `INSUFFICIENT_DATA` | A métrica `UnHealthyHostCount` ficou sem datapoints quando o target group não possuía tasks. | O comportamento de dados ausentes foi documentado como `missing`, distinguindo ausência de dados de uma transição comprovada para `ALARM`. |
+| O pipeline poderia promover artefatos diferentes | Um novo build para produção poderia divergir do artefato testado em staging. | A mesma tag baseada no SHA do commit é promovida de staging para produção, sem rebuild. |
+| O ALB poderia ser acessado diretamente | O ALB é público por ser o origin do CloudFront. | O listener exige um header secreto enviado pelo CloudFront, enquanto as tasks permanecem em subnets privadas. |
+
+Essas decisões priorizam rastreabilidade, menor privilégio, reexecução segura e separação entre os ambientes. A configuração adotada não elimina todos os riscos: por exemplo, `TreatMissingData: missing` evita falsos positivos por ausência de datapoints, mas pode gerar `INSUFFICIENT_DATA` em vez de `ALARM` quando não houver métrica suficiente.
+
+## Processo de rollback
+
+O rollback é feito promovendo novamente uma imagem já publicada no ECR. Como as tags são imutáveis e cada tag representa um commit, não é necessário reconstruir a imagem anterior.
+
+### Rollback por GitHub Actions
+
+1. Identifique o SHA da última versão estável no histórico do Git ou no ECR.
+2. Crie uma branch de rollback a partir desse commit.
+3. Abra um pull request ou faça o push conforme o processo do repositório.
+4. O workflow construirá ou reutilizará a tag correspondente ao SHA.
+5. O staging será atualizado e validado pelo health-check.
+6. Após a aprovação manual do ambiente `production`, a mesma tag será promovida para produção.
+
+Exemplo para identificar imagens publicadas:
+
+```bash
+AWS_PROFILE=lacrei-desafio aws ecr describe-images \
+  --repository-name devops-app \
+  --region us-east-1 \
+  --query 'sort_by(imageDetails,& imagePushedAt)[-10:].[imageTags[0],imagePushedAt,imageDigest]' \
+  --output table
+```
+
+### Rollback operacional direto no ECS
+
+Em uma indisponibilidade que exija ação imediata, é possível apontar temporariamente cada serviço para a revision anterior da task definition:
+
+```bash
+AWS_PROFILE=lacrei-desafio aws ecs list-task-definitions \
+  --family-prefix lacrei-desafio-devops-app-staging \
+  --status ACTIVE \
+  --sort DESC \
+  --region us-east-1
+
+AWS_PROFILE=lacrei-desafio aws ecs update-service \
+  --cluster lacrei-desafio-cluster \
+  --service lacrei-desafio-devops-app-staging \
+  --task-definition <REVISION_ESTAVEL> \
+  --region us-east-1
+```
+
+Repita para production somente após validar a revision no staging:
+
+```bash
+AWS_PROFILE=lacrei-desafio aws ecs update-service \
+  --cluster lacrei-desafio-cluster \
+  --service lacrei-desafio-devops-app-production \
+  --task-definition <REVISION_ESTAVEL> \
+  --region us-east-1
+```
+
+Depois de qualquer rollback manual, valide os endpoints públicos:
+
+```bash
+curl -sS -o /dev/null -w "staging: HTTP %{http_code}\n" \
+  "https://d1gjy0g4ibj9zk.cloudfront.net/devops/staging/status"
+
+curl -sS -o /dev/null -w "production: HTTP %{http_code}\n" \
+  "https://d1gjy0g4ibj9zk.cloudfront.net/devops/production/status"
+```
+
+O rollback manual deve ser seguido de uma correção no código ou no pipeline. Caso contrário, o próximo `terraform apply` ou deploy poderá reaplicar a versão defeituosa.
+
+## Checklist de segurança aplicado
+
+| Verificação | Status | Evidência no projeto |
+|---|---:|---|
+| Credenciais AWS permanentes fora do repositório | ✅ | GitHub Actions utiliza OIDC e IAM Role temporária. |
+| Secrets armazenados fora do código | ✅ | `AWS_ROLE_ARN` e `ALERT_EMAIL` são consumidos como GitHub Secrets. |
+| Princípio do menor privilégio | ✅ | IAM Role e políticas são limitadas aos recursos e ações do desafio. |
+| Permissão mínima do workflow | ✅ | Workflow declara `id-token: write` e `contents: read`. |
+| Tags de imagem imutáveis | ✅ | ECR utiliza `image_tag_mutability = "IMMUTABLE"`. |
+| Tasks sem IP público | ✅ | Fargate executa em subnets privadas com `assign_public_ip = false`. |
+| Tasks protegidas por Security Group | ✅ | A porta do container aceita tráfego somente do Security Group do ALB. |
+| Entrada pública via HTTPS | ✅ | CloudFront é o endpoint público e redireciona para HTTPS. |
+| Bypass direto do ALB reduzido | ✅ | Listener exige o header secreto de verificação de origem. |
+| Confirmação do e-mail de alertas | ✅ | Subscription SNS foi confirmada e recebeu notificação. |
+| Logs da aplicação acessíveis | ✅ | Task definition envia logs para CloudWatch Logs. |
+| State Terraform remoto e criptografado | ✅ | Backend S3 usa `encrypt = true` e lock nativo. |
+| Lock ignorado durante operações | ✅ | `-lock=false` não é usado no procedimento documentado. |
+| CORS | N/A | A aplicação expõe apenas um health-check sem fluxo de navegador ou API cross-origin. |
+
+O checklist foi aplicado à configuração entregue. A validação de segurança não substitui revisão periódica de permissões, rotação de secrets ou análise de custos.
+
 ## Limpeza da infraestrutura
 
 Os recursos AWS geram custos enquanto permanecem ativos. Para remover a infraestrutura provisionada por este state:
