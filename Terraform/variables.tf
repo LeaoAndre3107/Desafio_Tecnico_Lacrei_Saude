@@ -27,7 +27,12 @@ variable "devops_production_image_tag" {
 }
 
 variable "alert_email" {
-  description = "E-mail que recebe notificacoes do SNS quando um servico fica unhealthy"
+  description = "E-mail que recebe as notificacoes do SNS quando um alarme dispara ou volta ao normal"
   type        = string
   sensitive   = true
+
+  validation {
+    condition     = can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", var.alert_email))
+    error_message = "alert_email deve conter um endereco de e-mail valido."
+  }
 }

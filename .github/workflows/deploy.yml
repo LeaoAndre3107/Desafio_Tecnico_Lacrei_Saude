@@ -127,6 +127,22 @@ jobs:
           TAG=$(terraform output -raw devops_production_image_tag 2>/dev/null || echo "")
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
+      - name: Validar secret ALERT_EMAIL
+        env:
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+        run: |
+          if [ -z "$ALERT_EMAIL" ]; then
+            echo "::error::O secret ALERT_EMAIL está vazio ou indisponível neste job."
+            exit 1
+          fi
+
+          if ! printf '%s' "$ALERT_EMAIL" | grep -Eq '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$'; then
+            echo "::error::O secret ALERT_EMAIL não contém um e-mail válido."
+            exit 1
+          fi
+
+          echo "ALERT_EMAIL foi disponibilizado e passou na validação."
+
       - name: Terraform apply (staging)
         working-directory: Terraform
         env:
