@@ -74,6 +74,37 @@ jobs:
           docker stop smoke-test
           exit 1
 
+      - name: Verificar se a imagem já existe no ECR
+        id: image-exists
+        env:
+            IMAGE_TAG: ${{ github.sha }}
+        run: |
+                if aws ecr describe-images \
+                  --repository-name "$ECR_REPOSITORY" \
+                  --image-ids imageTag="$IMAGE_TAG" \
+                  --region "$AWS_REGION" \
+                  >/dev/null 2>&1; then
+                  echo "exists=true" >> "$GITHUB_OUTPUT"
+                  echo "A imagem $IMAGE_TAG já existe no ECR."
+                else
+                  echo "exists=false" >> "$GITHUB_OUTPUT"
+                  echo "A imagem $IMAGE_TAG ainda não existe no ECR."
+                fi
+
+      - name: Push da imagem (somente se ainda não existir)
+        if: steps.image-exists.outputs.exists != 'true'
+        env:
+            REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+            IMAGE_TAG: ${{ github.sha }}
+        run: docker push "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+      - name: Reutilizar imagem existente
+        if: steps.image-exists.outputs.exists == 'true'
+        run: |
+           echo "Push ignorado: a tag ${{ github.sha }} já existe."
+           echo "O pipeline continuará usando a imagem imutável já publicada."
+
+
       - name: Push da imagem (so depois do teste passar)
         env:
           REGISTRY: ${{ steps.ecr-login.outputs.registry }}
