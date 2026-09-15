@@ -119,3 +119,25 @@ module "cloudfront" {
     Managed = "terraform"
   }
 }
+
+module "alerts" {
+  source = "./modules/alerts"
+
+  project_name   = var.project_name
+  alert_email    = var.alert_email
+  alb_arn_suffix = module.ecs_cluster.alb_arn_suffix
+
+  services = {
+    staging = {
+      target_group_arn_suffix = module.ecs_service_devops_staging.target_group_arn_suffix
+    }
+    production = {
+      target_group_arn_suffix = module.ecs_service_devops_production.target_group_arn_suffix
+    }
+  }
+
+  tags = {
+    Project = var.project_name
+    Managed = "terraform"
+  }
+}

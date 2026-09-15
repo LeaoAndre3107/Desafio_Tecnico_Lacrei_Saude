@@ -25,3 +25,9 @@ variable "devops_production_image_tag" {
   description = "Tag da imagem devops-app em producao. Promovida a partir de uma tag ja validada em staging, nunca de um novo build direto."
   type        = string
 }
+
+variable "alert_email" {
+  description = "E-mail que recebe notificacoes do SNS quando um servico fica unhealthy"
+  type        = string
+  sensitive   = true
+}

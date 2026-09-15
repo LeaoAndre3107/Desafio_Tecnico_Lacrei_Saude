@@ -22,6 +22,10 @@ output "alb_security_group_id" {
   value = aws_security_group.alb.id
 }
 
+output "alb_arn_suffix" {
+  value = aws_lb.this.arn_suffix
+}
+
 output "ecr_repository_urls" {
   description = "Mapa nome do repo -> URL da imagem"
   value       = { for name, repo in aws_ecr_repository.this : name => repo.repository_url }
