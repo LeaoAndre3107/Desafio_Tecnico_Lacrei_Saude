@@ -252,17 +252,3 @@ AWS_PROFILE=lacrei-desafio terraform destroy
 
 ---
 
-## 🔮 Melhorias Futuras
-
-- [ ] Implementação de testes unitários e de integração automatizados na API Node.js.
-- [ ] Atualização das Actions do GitHub para sanar avisos de depreciação do runtime Node.js 20.
-- [ ] Ajuste granular da política `treat_missing_data` nos alarmes CloudWatch.
-
----
-
-## 📚 Referências Úteis
-
-- [AWS Fargate Developer Guide](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/AWS_Fargate.html)
-- [Amazon CloudWatch Alarms & Email Notifications](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/AlarmThatSendsEmail.html)
-- [Configuring OpenID Connect (OIDC) in AWS for GitHub Actions](https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services)
-- [Terraform S3 Backend Documentation](https://developer.hashicorp.com/terraform/language/settings/backends/s3)
