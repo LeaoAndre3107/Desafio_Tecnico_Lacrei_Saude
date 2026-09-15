@@ -104,13 +104,6 @@ jobs:
            echo "Push ignorado: a tag ${{ github.sha }} já existe."
            echo "O pipeline continuará usando a imagem imutável já publicada."
 
-
-      - name: Push da imagem (so depois do teste passar)
-        env:
-          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: docker push "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:

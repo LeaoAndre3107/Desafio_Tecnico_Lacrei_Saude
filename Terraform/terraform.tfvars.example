@@ -1,2 +1,7 @@
-# Nenhuma variável obrigatória no momento - todas têm default.
-# Arquivo mantido para extensibilidade futura (ex: restringir acesso por IP).
+# Variáveis obrigatórias para execução local.
+# No GitHub Actions, são fornecidas pelo workflow via TF_VAR_*.
+# Nunca comite valores reais neste arquivo.
+#
+# devops_staging_image_tag    = "commit-sha"
+# devops_production_image_tag = "commit-sha"
+# alert_email                 = "seu-email@dominio.com"
