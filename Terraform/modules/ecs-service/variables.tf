@@ -39,6 +39,12 @@ variable "app_prefix" {
   default     = ""
 }
 
+variable "origin_verify_secret" {
+  description = "Header secreto que o CloudFront envia. O listener so encaminha requisicoes que o carreguem."
+  type        = string
+  sensitive   = true
+}
+
 variable "ecr_repository_url" {
   type = string
 }

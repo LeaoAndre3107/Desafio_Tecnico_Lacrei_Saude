@@ -19,11 +19,17 @@ output "ecr_repository_urls" {
 }
 
 output "devops_staging_url" {
-  value = "http://${module.ecs_cluster.alb_dns_name}/devops/staging/status"
+  description = "URL publica de staging (HTTPS via CloudFront)"
+  value       = "https://${module.cloudfront.domain_name}/devops/staging/status"
 }
 
 output "devops_production_url" {
-  value = "http://${module.ecs_cluster.alb_dns_name}/devops/production/status"
+  description = "URL publica de producao (HTTPS via CloudFront)"
+  value       = "https://${module.cloudfront.domain_name}/devops/production/status"
+}
+
+output "cloudfront_domain_name" {
+  value = module.cloudfront.domain_name
 }
 
 output "devops_staging_image_tag" {

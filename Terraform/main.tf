@@ -4,6 +4,13 @@ provider "aws" {
 
 data "aws_caller_identity" "current" {}
 
+# Segredo compartilhado entre CloudFront e ALB, gerado automaticamente.
+# Fica no state (que ja e privado e criptografado no S3), nunca no codigo.
+resource "random_password" "origin_verify" {
+  length  = 40
+  special = false
+}
+
 module "network" {
   source = "./modules/network"
 
@@ -63,6 +70,7 @@ module "ecs_service_devops_staging" {
   listener_rule_priority = 10
   path_pattern            = "/devops/staging/*"
   app_prefix              = "/devops/staging"
+  origin_verify_secret    = random_password.origin_verify.result
 
   ecr_repository_url = module.ecs_cluster.ecr_repository_urls["devops-app"]
   image_tag           = var.devops_staging_image_tag
@@ -87,6 +95,7 @@ module "ecs_service_devops_production" {
   listener_rule_priority = 20
   path_pattern            = "/devops/production/*"
   app_prefix              = "/devops/production"
+  origin_verify_secret    = random_password.origin_verify.result
 
   ecr_repository_url = module.ecs_cluster.ecr_repository_urls["devops-app"]
   image_tag           = var.devops_production_image_tag
@@ -95,5 +104,18 @@ module "ecs_service_devops_production" {
     Project     = var.project_name
     Managed     = "terraform"
     Environment = "production"
+  }
+}
+
+module "cloudfront" {
+  source = "./modules/cloudfront"
+
+  project_name         = var.project_name
+  alb_dns_name         = module.ecs_cluster.alb_dns_name
+  origin_verify_secret = random_password.origin_verify.result
+
+  tags = {
+    Project = var.project_name
+    Managed = "terraform"
   }
 }

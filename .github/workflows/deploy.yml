@@ -105,9 +105,9 @@ jobs:
 
       - name: Validar staging
         run: |
-          ALB_DNS=$(cd Terraform && terraform output -raw alb_dns_name)
+          URL=$(cd Terraform && terraform output -raw devops_staging_url)
           for i in $(seq 1 15); do
-            if curl -sf "http://$ALB_DNS/devops/staging/status"; then
+            if curl -sf "$URL"; then
               echo "Staging OK na tentativa $i"
               exit 0
             fi
@@ -152,9 +152,9 @@ jobs:
 
       - name: Validar producao
         run: |
-          ALB_DNS=$(cd Terraform && terraform output -raw alb_dns_name)
+          URL=$(cd Terraform && terraform output -raw devops_production_url)
           for i in $(seq 1 15); do
-            if curl -sf "http://$ALB_DNS/devops/production/status"; then
+            if curl -sf "$URL"; then
               echo "Producao OK na tentativa $i"
               exit 0
             fi

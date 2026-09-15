@@ -87,6 +87,17 @@ resource "aws_lb_listener_rule" "this" {
       values = [var.path_pattern]
     }
   }
+
+  # Ambas as condicoes precisam bater (AND). Sem o header que so o CloudFront
+  # envia, a requisicao cai na acao padrao do listener (404) - e por isso que
+  # acessar o DNS do ALB direto via HTTP nao funciona, forcando todo trafego
+  # legitimo a passar pelo HTTPS do CloudFront.
+  condition {
+    http_header {
+      http_header_name = "X-Origin-Verify"
+      values           = [var.origin_verify_secret]
+    }
+  }
 }
 
 # --- Task definition ---

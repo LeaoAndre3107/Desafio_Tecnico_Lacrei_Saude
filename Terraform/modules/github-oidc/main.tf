@@ -65,6 +65,12 @@ resource "aws_iam_role_policy" "github_actions" {
         Resource = "*"
       },
       {
+        Sid      = "CloudFront"
+        Effect   = "Allow"
+        Action   = ["cloudfront:*"]
+        Resource = "*"
+      },
+      {
         Sid    = "Logs"
         Effect = "Allow"
         Action = [
