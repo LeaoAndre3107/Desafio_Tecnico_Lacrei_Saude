@@ -101,6 +101,7 @@ jobs:
         env:
           TF_VAR_devops_staging_image_tag: ${{ github.sha }}
           TF_VAR_devops_production_image_tag: ${{ steps.current-prod.outputs.tag }}
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
         run: terraform apply -auto-approve
 
       - name: Validar staging
@@ -148,6 +149,7 @@ jobs:
         env:
           TF_VAR_devops_staging_image_tag: ${{ needs.deploy-staging.outputs.image_tag }}
           TF_VAR_devops_production_image_tag: ${{ needs.deploy-staging.outputs.image_tag }}
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
         run: terraform apply -auto-approve
 
       - name: Validar producao
