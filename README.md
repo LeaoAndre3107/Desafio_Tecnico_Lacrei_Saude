@@ -58,7 +58,7 @@ O monitoramento também foi validado:
 ## Arquitetura
 
 ```mermaid
-flowchart LR
+flowchart TB
     classDef cicd fill:#0f172a,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
     classDef registry fill:#fff7ed,stroke:#f97316,color:#7c2d12,stroke-width:2px
     classDef staging fill:#eff6ff,stroke:#3b82f6,color:#1e3a8a,stroke-width:2px
