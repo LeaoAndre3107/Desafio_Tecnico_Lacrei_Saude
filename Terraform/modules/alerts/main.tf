@@ -27,6 +27,9 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_targets" {
   statistic            = "Maximum"
   threshold            = 1
 
+  treat_missing_data = "breaching"
+
+
   dimensions = {
     LoadBalancer = var.alb_arn_suffix
     TargetGroup  = each.value.target_group_arn_suffix
