@@ -1,222 +1,337 @@
 <div align="center">
 
-# 🚀 Desafio Técnico DevOps — Lacrei Saúde
+# Desafio Técnico DevOps
+## Lacrei Saúde
 
-**Pipeline de CI/CD Seguro, Infraestrutura em Nuvem Escalável e Observabilidade na AWS**
+**Deploy seguro, infraestrutura reproduzível e observabilidade na AWS**
 
-[![AWS](https://img.shields.io/badge/AWS-232F3E?style=for-the-badge&logo=amazon-aws&logoColor=white)](https://aws.amazon.com/)
-[![Terraform](https://img.shields.io/badge/Terraform-7B42BC?style=for-the-badge&logo=terraform&logoColor=white)](https://www.terraform.io/)
-[![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
-[![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)](https://github.com/features/actions)
-[![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+<br />
+
+![AWS](https://img.shields.io/badge/AWS-Cloud-orange?style=for-the-badge&logo=amazon-aws&logoColor=white)
+![Terraform](https://img.shields.io/badge/Terraform-IaC-7B42BC?style=for-the-badge&logo=terraform&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Container-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-CI%2FCD-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-20-339933?style=for-the-badge&logo=node.js&logoColor=white)
 
 </div>
 
----
+<br />
 
-## 📌 Visão Geral
+> Este projeto implementa uma aplicação Node.js/Express containerizada, executada em ECS Fargate, com deploy automatizado por GitHub Actions, autenticação OIDC, promoção controlada entre ambientes e monitoramento por CloudWatch e SNS.
 
-Este repositório contém a solução completa para o **Desafio Técnico de DevOps da Lacrei Saúde**. O projeto entrega uma aplicação **Node.js/Express** containerizada executada sobre **Amazon ECS com Fargate**, protegida por um **Application Load Balancer (ALB)** e pela CDN **Amazon CloudFront**.
+## Visão geral
 
-### 🌟 Destaques da Solução
-- **Zero Credentials Vazadas:** Autenticação AWS realizada 100% via **OIDC** (OpenID Connect) com credenciais temporárias, eliminando o uso de `AWS_ACCESS_KEY_ID` estáticas.
-- **Imutabilidade de Artefatos:** Imagens Docker marcadas exclusivamente com o SHA do commit. A **mesma imagem** aprovada e testada em *Staging* é promovida para *Produção*.
-- **Governança e Pipeline Seguro:** Proteção de ambiente com **aprovação manual obrigatória** antes da promoção para produção.
-- **Segurança em Camadas:** CloudFront valida origem com *Header Secreto*, e as tarefas ECS operam em subnets privadas sem IP público.
+A solução foi construída com foco em quatro objetivos:
 
----
+| Objetivo | Implementação |
+|---|---|
+| **Entrega segura** | GitHub Actions autenticado na AWS por OIDC, sem access keys permanentes. |
+| **Rastreabilidade** | Imagens Docker identificadas pelo SHA completo do commit e armazenadas com tags imutáveis. |
+| **Separação de ambientes** | Deploy em staging, validação automática e aprovação manual antes da produção. |
+| **Observabilidade** | Alarmes CloudWatch baseados na saúde dos targets do ALB e notificações via SNS. |
 
-## ✅ Resultados Validados em Ambiente Real
+## Resultado validado
 
-Os ambientes de **Staging** e **Produção** foram provisionados, integrados ao pipeline e validados com resposta `HTTP 200 OK`:
+Os dois ambientes estão publicados e respondendo corretamente pelo CloudFront:
 
-| Ambiente | Status | Endpoint de Validação | Resultado |
-| :--- | :---: | :--- | :---: |
-| 🟡 **Staging** | ![Active](https://img.shields.io/badge/ONLINE-brightgreen?style=flat-square) | [`/devops/staging/status`](https://d1gjy0g4ibj9zk.cloudfront.net/devops/staging/status) | `HTTP 200` |
-| 🟢 **Produção** | ![Active](https://img.shields.io/badge/ONLINE-brightgreen?style=flat-square) | [`/devops/production/status`](https://d1gjy0g4ibj9zk.cloudfront.net/devops/production/status) | `HTTP 200` |
+| Ambiente | Endpoint | Status |
+|---|---|---|
+| **Staging** | [`/devops/staging/status`](https://d1gjy0g4ibj9zk.cloudfront.net/devops/staging/status) | `HTTP 200` |
+| **Production** | [`/devops/production/status`](https://d1gjy0g4ibj9zk.cloudfront.net/devops/production/status) | `HTTP 200` |
 
-> 🏷️ **Tag da Imagem Promovida:** `deddb239a66829abc8e75cd236671eddfec22e49` *(Commit SHA)*  
-> 🔔 **Observabilidade:** Alarmes CloudWatch configurados (`OK`). Subscrição SNS confirmada via e-mail com recebimento de notificações de teste (`INSUFFICIENT_DATA -> OK`).
-
----
-
-## 🏗️ Arquitetura do Sistema
+A mesma imagem foi promovida de staging para produção:
 
 ```text
-               ┌─────────────────────────────────────────────────────────┐
-               │                     GITHUB ACTIONS                      │
-               └────────────────────────────┬────────────────────────────┘
-                                            │ Auth via OIDC (Sem Access Keys)
-                                            ▼
-                                   ┌─────────────────┐
-                                   │   Amazon ECR    │
-                                   │ (Tags por SHA)  │
-                                   └────────┬────────┘
-                                            │
-                      ┌─────────────────────┴─────────────────────┐
-                      │                                           │ (Aprovação Manual)
-                      ▼                                           ▼
-          ┌───────────────────────┐                   ┌───────────────────────┐
-          │  ECS Fargate Staging  │                   │ ECS Fargate Production│
-          └───────────┬───────────┘                   └───────────┬───────────┘
-                      │                                           │
-                      └─────────────────────┬─────────────────────┘
-                                            ▼
-                               ┌─────────────────────────┐
-                               │ Application Load Balancer│ (ALB Target Groups)
-                               └────────────▲────────────┘
-                                            │
-                                            │ (Header Secreto de Origem)
-                               ┌────────────┴────────────┐
-               🌐 Internet ──►│    Amazon CloudFront    │ (HTTPS / TLS)
-                               └─────────────────────────┘
+deddb239a66829abc8e75cd236671eddfec22e49
 ```
 
----
+O monitoramento também foi validado:
 
-## 🧩 Componentes e Responsabilidades
+- Alarmes de staging e production provisionados no CloudWatch.
+- Targets saudáveis com `UnHealthyHostCount = 0`.
+- Tópico SNS criado.
+- Subscription de e-mail confirmada.
+- Notificação de mudança de estado recebida por e-mail.
 
-| Componente | Tecnologia | Responsabilidade Principal |
-| :--- | :--- | :--- |
-| **Aplicação** | Node.js 20 / Express | API REST simples expondo rotas `/` e `/status` com health-check. |
-| **Container** | Docker (Alpine) | Imagem minimalista e segura, executada com usuário **não-root**. |
-| **Registry** | Amazon ECR | Repositório privado com bloqueio de imutabilidade de tags. |
-| **Computação** | AWS ECS + Fargate | Execução serverless de containers sem gerenciamento de EC2. |
-| **Roteamento** | Application Load Balancer | Distribuição de tráfego baseada em rotas de contexto (`/devops/*`). |
-| **Edge & Security**| Amazon CloudFront | Terminação TLS/HTTPS, cache de borda e proteção do ALB. |
-| **IaC** | Terraform | Provisionamento modularizado de 100% da infraestrutura em nuvem. |
-| **CI/CD** | GitHub Actions | Pipeline automatizado de build, teste de container e deploy contínuo. |
-| **Monitoramento** | CloudWatch + SNS | Alertas automáticos de indisponibilidade de réplicas via e-mail. |
+> O teste de notificação observado registrou a transição `INSUFFICIENT_DATA → OK`, confirmando a entrega do SNS ao e-mail configurado.
 
----
+## Arquitetura
 
-## 📁 Estrutura do Repositório
+```text
+┌─────────────────────┐
+│   GitHub Actions    │
+│  Build + Test + CI  │
+└──────────┬──────────┘
+           │ OIDC
+           ▼
+┌─────────────────────┐
+│     AWS ECR         │
+│  Tags por commit    │
+│     Imutáveis       │
+└──────────┬──────────┘
+           │
+     ┌─────┴─────┐
+     ▼           ▼
+┌──────────┐  ┌──────────────┐
+│ Staging  │  │ Production   │
+│ ECS      │  │ ECS Fargate  │
+│ Fargate  │  │              │
+└────┬─────┘  └──────┬───────┘
+     │               │
+     └───────┬───────┘
+             ▼
+┌─────────────────────┐
+│   Application LB     │
+│  Path-based routing  │
+└──────────┬──────────┘
+           │ Header secreto
+           ▼
+┌─────────────────────┐
+│   Amazon CloudFront  │
+│      HTTPS/TLS       │
+└──────────┬──────────┘
+           │
+           ▼
+        Internet
+```
+
+### Fluxo de promoção
+
+```text
+Push na main
+    ↓
+Build da imagem Docker
+    ↓
+Smoke test HTTP
+    ↓
+Verificação da tag no ECR
+    ↓
+Push somente se a tag ainda não existir
+    ↓
+Deploy em staging
+    ↓
+Health-check de staging
+    ↓
+Aprovação manual no ambiente production
+    ↓
+Promoção da mesma imagem
+    ↓
+Deploy e health-check de production
+```
+
+## Componentes da solução
+
+| Camada | Tecnologia | Responsabilidade |
+|---|---|---|
+| **Aplicação** | Node.js + Express | Expor as rotas da aplicação e o health-check. |
+| **Container** | Docker | Empacotar a aplicação com imagem Alpine e usuário não-root. |
+| **Registry** | Amazon ECR | Armazenar imagens com tags imutáveis por SHA. |
+| **Computação** | ECS + Fargate | Executar os serviços sem gerenciamento de servidores. |
+| **Rede** | VPC, subnets públicas e privadas | Isolar os componentes e controlar o tráfego. |
+| **Entrada** | ALB + CloudFront | Roteamento por path e acesso HTTPS público. |
+| **IaC** | Terraform | Provisionar e versionar a infraestrutura. |
+| **CI/CD** | GitHub Actions | Automatizar build, validação e promoção. |
+| **Observabilidade** | CloudWatch + SNS | Monitorar targets unhealthy e enviar alertas. |
+
+## Aplicação
+
+A aplicação está em `app/server.js` e possui duas rotas:
+
+| Método | Rota | Comportamento |
+|---|---|---|
+| `GET` | `/` | Retorna uma identificação simples da aplicação. |
+| `GET` | `/status` | Retorna status, uptime do processo e timestamp. |
+
+Exemplo de resposta:
+
+```json
+{
+  "status": "ok",
+  "uptime_seconds": 315.607,
+  "timestamp": "2026-09-15T02:46:44.878Z"
+}
+```
+
+Nos ambientes AWS, o prefixo é configurado pela variável `APP_PREFIX`:
+
+```text
+/devops/staging/status
+/devops/production/status
+```
+
+A porta da aplicação pode ser configurada pela variável `PORT`. O padrão é `3000`.
+
+## Estrutura do repositório
 
 ```text
 .
-├── .github/
-│   └── workflows/          # Workflows do GitHub Actions (CI/CD Pipeline)
-├── app/                    # Código-fonte da aplicação Node.js & Dockerfile
-│   ├── index.js
+├── app/
+│   ├── server.js
 │   ├── package.json
-│   └── Dockerfile
-└── Terraform/              # Código da Infraestrutura (IaC)
-    ├── main.tf             # Declaração dos módulos e provider
-    ├── outputs.tf          # Saídas da infraestrutura (URLs, ARNs)
-    ├── variables.tf        # Variáveis globais
-    ├── iam/                # Políticas e roles de permissão
-    └── modules/            # Módulos reutilizáveis
-        ├── alerts/         # CloudWatch Alarms & Tópicos SNS
-        ├── cloudfront/     # Distribuição CDN e headers de origem
-        ├── ecs-cluster/    # Cluster ECS, ALB e ECR
-        ├── ecs-service/    # Definição de Tasks Fargate e Target Groups
-        ├── github-oidc/    # Integração OIDC com GitHub Actions
-        └── network/        # VPC, Subnets Públicas/Privadas, NAT Gateways
+│   ├── package-lock.json
+│   ├── Dockerfile
+│   └── .dockerignore
+├── Terraform/
+│   ├── backend.tf
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── outputs.tf
+│   ├── iam/
+│   └── modules/
+│       ├── alerts/
+│       ├── cloudfront/
+│       ├── ecs-cluster/
+│       ├── ecs-service/
+│       ├── github-oidc/
+│       └── network/
+├── .github/
+│   └── workflows/
+│       └── deploy.yml
+└── README.md
 ```
 
----
+## Execução local
 
-## 💻 Desenvolvimento Local & Docker
-
-### Rotas da Aplicação
-* `GET /`: Retorna a identificação básica da API.
-* `GET /status`: Retorna o status de integridade (`UP`), `uptime` do serviço e *timestamp* ISO.
-
-### 1. Executando Nativamente
+### Node.js
 
 ```bash
 cd app
 npm install
 npm start
 ```
-*Em outro terminal, valide o health-check:*
+
+Em outro terminal:
+
 ```bash
 curl -i http://localhost:3000/status
 ```
 
-### 2. Executando via Docker
+### Docker
 
 ```bash
 cd app
-
-# Build da imagem local
 docker build -t lacrei-status-app .
-
-# Execução do container isolado
 docker run --rm -p 3000:3000 lacrei-status-app
 ```
 
----
+Validação:
 
-## 🔄 Pipeline CI/CD (GitHub Actions)
-
-O pipeline é disparado automaticamente a cada `push` na branch `main` que contenha alterações em `app/`, `Terraform/` ou nos próprios arquivos de pipeline.
-
-```text
-[Commit/Push] ➔ [OIDC Auth] ➔ [Build & Smoke Test] ➔ [ECR Check/Push] ➔ [Deploy Staging] ➔ [Aprovação Manual] ➔ [Deploy Production]
+```bash
+curl -i http://localhost:3000/status
 ```
 
-### Etapas Detalhadas:
-1. **Autenticação OIDC:** Assume a IAM Role temporária na AWS sem uso de senhas ou chaves salvas.
-2. **Build & Validation:** Constrói a imagem Docker e roda um *smoke test* funcional do container.
-3. **Idempotência no ECR:** Verifica se a tag (SHA) já existe no ECR para evitar re-uploads desnecessários.
-4. **Deploy Staging:** Executa o rollout da nova task no ambiente de Staging.
-5. **Health Gate Staging:** Aguarda e valida se a rota `/status` respondeu com HTTP 200.
-6. **Manual Approval:** Pausa o workflow exigindo a aprovação de um revisor no ambiente `production` do GitHub.
-7. **Promotion to Production:** Promove **exatamente a mesma imagem** para Produção e valida a saúde do ambiente.
+O Dockerfile utiliza `node:20-alpine`, instala as dependências com `npm ci --omit=dev`, executa o processo como usuário não-root e inclui um `HEALTHCHECK` baseado na rota `/status`.
 
----
+## Infraestrutura AWS
 
-## 🔐 Configuração de Secrets no GitHub
+A infraestrutura é modularizada em Terraform e utiliza:
 
-Para replicar o pipeline, configure as seguintes variáveis em **Settings → Secrets and variables → Actions**:
+- VPC dedicada com CIDR `10.20.0.0/16`.
+- Duas subnets públicas e duas subnets privadas.
+- NAT Gateway único para reduzir o custo do ambiente de portfólio.
+- ECS Cluster com Container Insights habilitado.
+- Serviços Fargate separados para staging e production.
+- ALB com roteamento por path.
+- ECR com `IMMUTABLE` tags.
+- CloudFront com HTTPS obrigatório.
+- Security groups em camadas.
+- IAM Role para GitHub Actions via OIDC.
+- CloudWatch Alarms e SNS.
 
-| Secret | Descrição | Exemplo / Formato |
-| :--- | :--- | :--- |
-| `AWS_ROLE_ARN` | ARN da Role do IAM criada para acesso OIDC pelo GitHub. | `arn:aws:iam::123456789012:role/GitHubActionsRole` |
-| `ALERT_EMAIL` | E-mail para recebimento dos alertas de indisponibilidade do SNS. | `devops@empresa.com.br` |
+As tasks Fargate executam em subnets privadas, sem IP público. O tráfego permitido para as tasks é originado somente pelo security group do ALB.
 
-> ⚠️ **Importante:** Após o provisionamento do SNS, acesse a caixa do e-mail cadastrado e **confirme a subscrição** clicando no link enviado pela AWS.
+### Backend do Terraform
 
----
+O state é armazenado remotamente no S3:
 
-## 🛠️ Gerenciamento da Infraestrutura (Terraform)
+```text
+Bucket: lacrei-desafio-terraform-state
+Key:    lacrei-desafio/terraform.tfstate
+Region: us-east-1
+Lock:   arquivo de lock nativo do backend S3
+```
 
-O estado da infraestrutura é mantido remotamente no **Amazon S3** com locking via DynamoDB/S3 Native:
+## GitHub Actions
 
-* **Bucket S3:** `lacrei-desafio-terraform-state`
-* **Key:** `lacrei-desafio/terraform.tfstate`
-* **Região:** `us-east-1`
+O workflow está em:
 
-### Comandos para Execução
+```text
+.github/workflows/deploy.yml
+```
+
+Ele é acionado por push na branch `main` quando há alterações em:
+
+```text
+app/**
+Terraform/**
+.github/workflows/deploy.yml
+```
+
+### Segurança
+
+O pipeline usa GitHub Actions OIDC para assumir uma IAM Role temporária na AWS. Não são utilizadas access keys permanentes armazenadas como secrets.
+
+### Tags imutáveis
+
+A imagem recebe uma tag baseada no SHA do commit:
+
+```yaml
+IMAGE_TAG: ${{ github.sha }}
+```
+
+Antes do push, o workflow verifica se a tag já existe no ECR. Isso permite reexecutar um pipeline sem tentar sobrescrever uma tag imutável que já foi publicada.
+
+### Secrets necessários
+
+Configure em **Settings → Secrets and variables → Actions**:
+
+| Secret | Finalidade |
+|---|---|
+| `AWS_ROLE_ARN` | ARN da IAM Role assumida pelo GitHub Actions via OIDC. |
+| `ALERT_EMAIL` | E-mail utilizado pela subscription do SNS. |
+
+O ambiente `production` deve possuir aprovação manual configurada por meio de um required reviewer.
+
+## Operação do Terraform
+
+Execute os comandos dentro da pasta `Terraform`:
 
 ```bash
 cd Terraform
-
-# Inicializa o backend remoto e baixa os provedores
 AWS_PROFILE=lacrei-desafio terraform init
-
-# Planeja e visualiza as alterações no ambiente
 AWS_PROFILE=lacrei-desafio terraform plan
-
-# Aplica as alterações planejadas
 AWS_PROFILE=lacrei-desafio terraform apply
 ```
 
-> 🛑 **Aviso de Boa Prática:** Nunca utilize `-lock=false` para burlar travamentos de *state*. Verifique se não há pipelines em execução antes de gerenciar o *lock*.
+Consulte as URLs publicadas:
 
----
+```bash
+AWS_PROFILE=lacrei-desafio terraform output
+```
 
-## 📊 Observabilidade e Alertas
+Não utilize `-lock=false` para contornar um lock. Antes de usar `force-unlock`, confirme que não existe outro `terraform plan`, `terraform apply` ou workflow ativo usando o mesmo state remoto.
 
-A infraestrutura conta com alarmes dedicados por ambiente vinculados à métrica `AWS/ApplicationELB/UnHealthyHostCount`.
+## Monitoramento e alertas
 
-* **Regra do Alarme:** Disparado (`ALARM`) quando ao menos 1 container falhar nos health-checks durante **2 períodos consecutivos de 60 segundos**.
-* **Notificação:** Mensagem instantânea enviada via **Amazon SNS** para o e-mail cadastrado.
+Existe um alarme por ambiente para a métrica:
 
-### Comandos de Diagnóstico AWS CLI
+```text
+AWS/ApplicationELB/UnHealthyHostCount
+```
 
-**Verificar status dos Alarmes:**
+Configuração principal:
+
+| Parâmetro | Valor |
+|---|---|
+| Período | 60 segundos |
+| Períodos de avaliação | 2 |
+| Estatística | Maximum |
+| Limite | `>= 1` target unhealthy |
+| Ação | Publicação no SNS |
+| Dados ausentes | `missing` |
+
+Consultar os alarmes:
+
 ```bash
 AWS_PROFILE=lacrei-desafio aws cloudwatch describe-alarms \
   --alarm-name-prefix lacrei-desafio \
@@ -225,7 +340,8 @@ AWS_PROFILE=lacrei-desafio aws cloudwatch describe-alarms \
   --output table
 ```
 
-**Verificar subscrições do Tópico SNS:**
+Consultar a subscription do SNS:
+
 ```bash
 AWS_PROFILE=lacrei-desafio aws sns list-subscriptions-by-topic \
   --topic-arn arn:aws:sns:us-east-1:905542450009:lacrei-desafio-alerts \
@@ -234,21 +350,22 @@ AWS_PROFILE=lacrei-desafio aws sns list-subscriptions-by-topic \
   --output table
 ```
 
----
+A subscription de e-mail precisa ser confirmada pelo link enviado pela AWS. Enquanto não for confirmada, seu ARN aparece como `PendingConfirmation` e as notificações não são entregues.
 
-## 🧹 Limpeza de Recursos (Destruição)
+## Limpeza da infraestrutura
 
-Para evitar custos desnecessários em ambientes de teste/demonstração, destrua os recursos provisionados quando não estiverem em uso:
+Os recursos AWS geram custos enquanto permanecem ativos. Para remover a infraestrutura provisionada por este state:
 
 ```bash
 cd Terraform
-
-# Planeja a destruição dos recursos
 AWS_PROFILE=lacrei-desafio terraform plan -destroy
-
-# Executa a remoção completa da infraestrutura
 AWS_PROFILE=lacrei-desafio terraform destroy
 ```
 
----
+Revise o plano antes de confirmar a destruição.
 
+<div align="center">
+
+**Desafio Técnico DevOps — Lacrei Saúde**
+
+</div>
