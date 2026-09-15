@@ -178,6 +178,29 @@ Em outro terminal:
 curl -i http://localhost:3000/status
 ```
 
+### Lint e testes automatizados
+
+Antes do build da imagem, o projeto executa uma validação estática com ESLint e testes automatizados com Jest e Supertest:
+
+```bash
+cd app
+npm install
+npm run lint
+npm test
+```
+
+O lint verifica a sintaxe e regras básicas de qualidade do código. Os testes validam a rota `/status`, o código HTTP `200`, o campo `status`, o uptime, o timestamp e a rota raiz `/`.
+
+O resultado esperado é semelhante a:
+
+```text
+ESLint sem erros
+Test Suites: 1 passed, 1 total
+Tests:       2 passed, 2 total
+```
+
+No GitHub Actions, os comandos `npm run lint` e `npm test` são executados depois do checkout e antes do `docker build`. Se qualquer um deles falhar, a imagem não é construída nem publicada no ECR.
+
 ### Docker
 
 ```bash
@@ -252,6 +275,30 @@ IMAGE_TAG: ${{ github.sha }}
 ```
 
 Antes do push, o workflow verifica se a tag já existe no ECR. Isso permite reexecutar um pipeline sem tentar sobrescrever uma tag imutável que já foi publicada.
+
+### Sequência de validação
+
+O job de staging executa as etapas nesta ordem:
+
+```text
+Checkout
+  ↓
+Autenticação AWS via OIDC
+  ↓
+npm ci + npm run lint + npm test
+  ↓
+Docker build
+  ↓
+Smoke test HTTP do container
+  ↓
+Verificação da tag no ECR e push condicional
+  ↓
+Terraform apply em staging
+  ↓
+Health-check de staging
+```
+
+Depois da aprovação manual do ambiente `production`, o segundo job aplica a mesma tag de imagem em produção e executa o health-check público.
 
 ### Secrets necessários
 

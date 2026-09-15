@@ -41,6 +41,13 @@ jobs:
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Instalar dependências, executar lint e testes
+        working-directory: app
+        run: |
+          npm ci
+          npm run lint
+          npm test
+
       - name: Build da imagem
         working-directory: app
         env:

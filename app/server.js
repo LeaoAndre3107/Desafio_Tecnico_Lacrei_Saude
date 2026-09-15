@@ -17,15 +17,18 @@ app.get('/', (req, res) => {
   res.status(200).send('Lacrei Saude - status app');
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`Servidor escutando na porta ${PORT}`);
-});
-
-process.on('SIGTERM', () => {
-  console.log('SIGTERM recebido, encerrando servidor...');
-  server.close(() => {
-    console.log('Servidor encerrado.');
-    process.exit(0);
+if (require.main === module) {
+  const server = app.listen(PORT, () => {
+    console.log(`Servidor escutando na porta ${PORT}`);
   });
-});
 
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM recebido, encerrando servidor...');
+    server.close(() => {
+      console.log('Servidor encerrado.');
+      process.exit(0);
+    });
+  });
+}
+
+module.exports = app;
