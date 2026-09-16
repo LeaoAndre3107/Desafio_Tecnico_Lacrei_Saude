@@ -43,13 +43,13 @@ module "ecs_cluster" {
 module "github_oidc" {
   source = "./modules/github-oidc"
 
-  github_owner      = "LeaoAndre3107"
-  github_owner_id   = "119906272"
-  github_repo_name  = "Desafio_Tecnico_Lacrei_Saude"
-  github_repo_id    = "1367803676"
-  github_branch           = "main"
-  account_id              = data.aws_caller_identity.current.account_id
-  terraform_state_bucket  = "lacrei-desafio-terraform-state"
+  github_owner           = "LeaoAndre3107"
+  github_owner_id        = "119906272"
+  github_repo_name       = "Desafio_Tecnico_Lacrei_Saude"
+  github_repo_id         = "1367803676"
+  github_branch          = "main"
+  account_id             = data.aws_caller_identity.current.account_id
+  terraform_state_bucket = "lacrei-desafio-terraform-state"
 
   tags = {
     Project = var.project_name
@@ -68,12 +68,13 @@ module "ecs_service_devops_staging" {
   alb_security_group_id  = module.ecs_cluster.alb_security_group_id
   alb_listener_arn       = module.ecs_cluster.alb_listener_arn
   listener_rule_priority = 10
-  path_pattern            = "/devops/staging/*"
-  app_prefix              = "/devops/staging"
-  origin_verify_secret    = random_password.origin_verify.result
+  path_pattern           = "/devops/staging/*"
+  app_prefix             = "/devops/staging"
+  origin_verify_secret   = random_password.origin_verify.result
 
   ecr_repository_url = module.ecs_cluster.ecr_repository_urls["devops-app"]
-  image_tag           = var.devops_staging_image_tag
+  image_tag          = var.devops_staging_image_tag
+  desired_count      = 1
 
   tags = {
     Project     = var.project_name
@@ -93,12 +94,13 @@ module "ecs_service_devops_production" {
   alb_security_group_id  = module.ecs_cluster.alb_security_group_id
   alb_listener_arn       = module.ecs_cluster.alb_listener_arn
   listener_rule_priority = 20
-  path_pattern            = "/devops/production/*"
-  app_prefix              = "/devops/production"
-  origin_verify_secret    = random_password.origin_verify.result
+  path_pattern           = "/devops/production/*"
+  app_prefix             = "/devops/production"
+  origin_verify_secret   = random_password.origin_verify.result
 
   ecr_repository_url = module.ecs_cluster.ecr_repository_urls["devops-app"]
-  image_tag           = var.devops_production_image_tag
+  image_tag          = var.devops_production_image_tag
+  desired_count      = 2
 
   tags = {
     Project     = var.project_name

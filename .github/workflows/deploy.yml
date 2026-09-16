@@ -31,6 +31,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Terraform para validação
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.7"
+
+      - name: Validar Terraform
+        working-directory: Terraform
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false
+          terraform validate
+
+      - name: Scan de segurança do Terraform
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: Terraform
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
       - name: Configurar credenciais AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -54,6 +75,14 @@ jobs:
           REGISTRY: ${{ steps.ecr-login.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: docker build -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
+
+      - name: Scan de segurança da imagem Docker
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
 
       - name: Teste minimo do container (smoke test)
         env:

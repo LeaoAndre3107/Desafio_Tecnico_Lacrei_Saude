@@ -1,0 +1,56 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EcrAuth",
+      "Effect": "Allow",
+      "Action": "ecr:GetAuthorizationToken",
+      "Resource": "*"
+    },
+    {
+      "Sid": "EcrRepository",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:CompleteLayerUpload",
+        "ecr:DescribeImages",
+        "ecr:InitiateLayerUpload",
+        "ecr:PutImage",
+        "ecr:UploadLayerPart"
+      ],
+      "Resource": "arn:aws:ecr:<AWS_REGION>:<AWS_ACCOUNT_ID>:repository/devops-app"
+    },
+    {
+      "Sid": "EcsDeploy",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeServices",
+        "ecs:DescribeTaskDefinition",
+        "ecs:ListTaskDefinitions",
+        "ecs:RegisterTaskDefinition",
+        "ecs:UpdateService"
+      ],
+      "Resource": [
+        "arn:aws:ecs:<AWS_REGION>:<AWS_ACCOUNT_ID>:cluster/lacrei-desafio-cluster",
+        "arn:aws:ecs:<AWS_REGION>:<AWS_ACCOUNT_ID>:service/lacrei-desafio-cluster/lacrei-desafio-devops-app-staging",
+        "arn:aws:ecs:<AWS_REGION>:<AWS_ACCOUNT_ID>:service/lacrei-desafio-cluster/lacrei-desafio-devops-app-production",
+        "arn:aws:ecs:<AWS_REGION>:<AWS_ACCOUNT_ID>:task-definition/lacrei-desafio-devops-app-staging:*",
+        "arn:aws:ecs:<AWS_REGION>:<AWS_ACCOUNT_ID>:task-definition/lacrei-desafio-devops-app-production:*"
+      ]
+    },
+    {
+      "Sid": "PassOnlyEcsExecutionRoles",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": [
+        "arn:aws:iam::<AWS_ACCOUNT_ID>:role/lacrei-desafio-devops-app-staging-exec-role",
+        "arn:aws:iam::<AWS_ACCOUNT_ID>:role/lacrei-desafio-devops-app-production-exec-role"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "ecs-tasks.amazonaws.com"
+        }
+      }
+    }
+  ]
+}

@@ -139,8 +139,10 @@ A porta da aplicação pode ser configurada pela variável `PORT`. O padrão é 
 .
 ├── app/
 │   ├── server.js
+│   ├── server.test.js
 │   ├── package.json
 │   ├── package-lock.json
+│   ├── .eslintrc.json
 │   ├── Dockerfile
 │   └── .dockerignore
 ├── Terraform/
@@ -225,15 +227,20 @@ A infraestrutura é modularizada em Terraform e utiliza:
 - Duas subnets públicas e duas subnets privadas.
 - NAT Gateway único para reduzir o custo do ambiente de portfólio.
 - ECS Cluster com Container Insights habilitado.
-- Serviços Fargate separados para staging e production.
+- Serviços Fargate separados para staging e production, com uma task em staging e duas tasks em production.
 - ALB com roteamento por path.
 - ECR com `IMMUTABLE` tags.
 - CloudFront com HTTPS obrigatório.
+- CloudFront restrito aos métodos `GET` e `HEAD`, usados pela aplicação.
 - Security groups em camadas.
 - IAM Role para GitHub Actions via OIDC.
 - CloudWatch Alarms e SNS.
 
 As tasks Fargate executam em subnets privadas, sem IP público. O tráfego permitido para as tasks é originado somente pelo security group do ALB.
+
+O tráfego público entre o usuário e o CloudFront utiliza HTTPS. O origin CloudFront → ALB utiliza HTTP porque o ALB desta entrega usa o domínio padrão `elb.amazonaws.com` e não possui um certificado ACM associado a um domínio controlado pelo projeto. O acesso direto ao ALB é reduzido pelo header secreto exigido nas regras do listener. Em um ambiente produtivo com domínio próprio, o próximo passo seria habilitar listener HTTPS no ALB e configurar `origin_protocol_policy = "https-only"`.
+
+O projeto utiliza um NAT Gateway único como decisão consciente de custo para o ambiente de demonstração. Isso reduz o custo, mas não oferece alta disponibilidade completa para a saída das subnets privadas. Para produção, a alternativa seria um NAT Gateway por AZ ou VPC endpoints quando aplicável.
 
 ### Backend do Terraform
 
@@ -283,11 +290,15 @@ O job de staging executa as etapas nesta ordem:
 ```text
 Checkout
   ↓
+Terraform fmt + validate + scan de configuração
+  ↓
 Autenticação AWS via OIDC
   ↓
 npm ci + npm run lint + npm test
   ↓
 Docker build
+  ↓
+Scan de vulnerabilidades da imagem
   ↓
 Smoke test HTTP do container
   ↓
@@ -347,7 +358,7 @@ Configuração principal:
 | Estatística | Maximum |
 | Limite | `>= 1` target unhealthy |
 | Ação | Publicação no SNS |
-| Dados ausentes | `missing` |
+| Dados ausentes | `breaching` |
 
 Consultar os alarmes:
 
@@ -380,11 +391,11 @@ Durante a implementação, alguns problemas reais exigiram correções no códig
 | A reexecução do pipeline falhou no `docker push` | O ECR estava configurado com tags imutáveis e a imagem do mesmo SHA já havia sido publicada antes de uma falha posterior. | O workflow passou a consultar o ECR antes do push. Se a tag já existir, a imagem publicada é reutilizada. |
 | O Terraform ficou aguardando `alert_email` | A variável não possuía valor padrão e não havia sido enviada em uma execução do CI. | O e-mail passou a ser fornecido por `TF_VAR_alert_email` a partir do secret `ALERT_EMAIL`, com validação prévia no workflow. |
 | O state remoto ficou bloqueado | Uma execução de `plan` ou `apply` foi interrompida e o lock nativo do backend S3 permaneceu ativo. | Processos locais e workflows ativos passaram a ser verificados antes de usar `force-unlock`. O uso de `-lock=false` foi evitado. |
-| O teste com zero tasks produziu `INSUFFICIENT_DATA` | A métrica `UnHealthyHostCount` ficou sem datapoints quando o target group não possuía tasks. | O comportamento de dados ausentes foi documentado como `missing`, distinguindo ausência de dados de uma transição comprovada para `ALARM`. |
+| O teste com zero tasks produziu `INSUFFICIENT_DATA` | A métrica `UnHealthyHostCount` ficou sem datapoints quando o target group não possuía tasks. | O alarme passou a tratar dados ausentes como `breaching`, reduzindo o risco de esconder uma indisponibilidade. |
 | O pipeline poderia promover artefatos diferentes | Um novo build para produção poderia divergir do artefato testado em staging. | A mesma tag baseada no SHA do commit é promovida de staging para produção, sem rebuild. |
 | O ALB poderia ser acessado diretamente | O ALB é público por ser o origin do CloudFront. | O listener exige um header secreto enviado pelo CloudFront, enquanto as tasks permanecem em subnets privadas. |
 
-Essas decisões priorizam rastreabilidade, menor privilégio, reexecução segura e separação entre os ambientes. A configuração adotada não elimina todos os riscos: por exemplo, `TreatMissingData: missing` evita falsos positivos por ausência de datapoints, mas pode gerar `INSUFFICIENT_DATA` em vez de `ALARM` quando não houver métrica suficiente.
+Essas decisões priorizam rastreabilidade, menor privilégio, reexecução segura e separação entre os ambientes. Com `TreatMissingData: breaching`, a ausência de métrica é tratada como uma condição de alerta, evitando que um target sem datapoints oculte uma possível indisponibilidade.
 
 ## Processo de rollback
 

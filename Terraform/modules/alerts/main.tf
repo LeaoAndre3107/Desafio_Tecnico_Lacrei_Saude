@@ -20,13 +20,15 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_targets" {
   alarm_name          = "${var.project_name}-${each.key}-unhealthy-targets"
   alarm_description   = "Pelo menos 1 target unhealthy em ${each.key} por 2 minutos seguidos"
   comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods   = 2
-  metric_name          = "UnHealthyHostCount"
-  namespace            = "AWS/ApplicationELB"
-  period               = 60
-  statistic            = "Maximum"
-  threshold            = 1
+  evaluation_periods  = 2
+  metric_name         = "UnHealthyHostCount"
+  namespace           = "AWS/ApplicationELB"
+  period              = 60
+  statistic           = "Maximum"
+  threshold           = 1
 
+  # Ausência de métrica é tratada como violação: um target sem datapoint
+  # não deve esconder uma possível indisponibilidade do serviço.
   treat_missing_data = "breaching"
 
 

@@ -29,7 +29,7 @@ resource "aws_cloudfront_distribution" "this" {
       http_port              = 80
       https_port             = 443
       origin_protocol_policy = "http-only"
-      origin_ssl_protocols    = ["TLSv1.2"]
+      origin_ssl_protocols   = ["TLSv1.2"]
     }
 
     # Header secreto compartilhado: o ALB so aceita requisicoes que o
@@ -44,7 +44,7 @@ resource "aws_cloudfront_distribution" "this" {
   default_cache_behavior {
     target_origin_id       = "alb-origin"
     viewer_protocol_policy = "redirect-to-https" # HTTP publico e redirecionado para HTTPS
-    allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    allowed_methods        = ["GET", "HEAD"]
     cached_methods         = ["GET", "HEAD"]
     compress               = true
 
