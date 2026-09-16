@@ -49,7 +49,7 @@ O monitoramento também foi validado:
 
 - Alarmes de staging e production provisionados no CloudWatch.
 - Targets saudáveis com `UnHealthyHostCount = 0`.
-- Tópico SNS criado.
+- Tópico SNS criado e criptografado com a chave gerenciada `alias/aws/sns`.
 - Subscription de e-mail confirmada.
 - Notificação de mudança de estado recebida por e-mail.
 
@@ -232,6 +232,7 @@ A infraestrutura é modularizada em Terraform e utiliza:
 - ECR com `IMMUTABLE` tags.
 - CloudFront com HTTPS obrigatório.
 - CloudFront restrito aos métodos `GET` e `HEAD`, usados pela aplicação.
+- AWS WAF associado ao CloudFront com `AWSManagedRulesCommonRuleSet`.
 - Security groups em camadas.
 - IAM Role para GitHub Actions via OIDC.
 - CloudWatch Alarms e SNS.
