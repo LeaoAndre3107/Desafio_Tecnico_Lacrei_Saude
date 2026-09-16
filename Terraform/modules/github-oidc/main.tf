@@ -95,6 +95,28 @@ resource "aws_iam_role_policy" "github_actions" {
         Resource = "*"
       },
       {
+        Sid    = "KmsForAlertsProvisioning"
+        Effect = "Allow"
+        Action = [
+          "kms:CreateAlias",
+          "kms:CreateKey",
+          "kms:DescribeKey",
+          "kms:DisableKey",
+          "kms:EnableKey",
+          "kms:EnableKeyRotation",
+          "kms:GetKeyPolicy",
+          "kms:GetKeyRotationStatus",
+          "kms:ListAliases",
+          "kms:ListResourceTags",
+          "kms:PutKeyPolicy",
+          "kms:ScheduleKeyDeletion",
+          "kms:TagResource",
+          "kms:UntagResource",
+          "kms:UpdateAlias"
+        ]
+        Resource = "*"
+      },
+      {
         Sid    = "Logs"
         Effect = "Allow"
         Action = [

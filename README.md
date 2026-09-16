@@ -49,7 +49,7 @@ O monitoramento também foi validado:
 
 - Alarmes de staging e production provisionados no CloudWatch.
 - Targets saudáveis com `UnHealthyHostCount = 0`.
-- Tópico SNS criado e criptografado com a chave gerenciada `alias/aws/sns`.
+- Tópico SNS criado e criptografado com uma CMK dedicada, com rotação automática habilitada.
 - Subscription de e-mail confirmada.
 - Notificação de mudança de estado recebida por e-mail.
 
