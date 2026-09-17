@@ -71,6 +71,21 @@ resource "aws_iam_role_policy" "github_actions" {
         Resource = "*"
       },
       {
+        Sid    = "CloudFrontWaf"
+        Effect = "Allow"
+        Action = [
+          "wafv2:CreateWebACL",
+          "wafv2:DeleteWebACL",
+          "wafv2:GetWebACL",
+          "wafv2:ListWebACLs",
+          "wafv2:ListTagsForResource",
+          "wafv2:TagResource",
+          "wafv2:UntagResource",
+          "wafv2:UpdateWebACL"
+        ]
+        Resource = "*"
+      },
+      {
         Sid    = "AlertsSnsCloudWatch"
         Effect = "Allow"
         Action = [

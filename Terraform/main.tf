@@ -112,6 +112,8 @@ module "ecs_service_devops_production" {
 module "cloudfront" {
   source = "./modules/cloudfront"
 
+  depends_on = [module.github_oidc]
+
   project_name         = var.project_name
   alb_dns_name         = module.ecs_cluster.alb_dns_name
   origin_verify_secret = random_password.origin_verify.result
@@ -124,6 +126,8 @@ module "cloudfront" {
 
 module "alerts" {
   source = "./modules/alerts"
+
+  depends_on = [module.github_oidc]
 
   project_name   = var.project_name
   alert_email    = var.alert_email
