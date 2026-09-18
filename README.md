@@ -68,6 +68,20 @@ Resultado: imagem SHA existente reaplicada no ECS e health-check aprovado
 
 A fonte editável do diagrama está em [`docs/architecture.mmd`](docs/architecture.mmd).
 
+### Visão visual dos fluxos
+
+O diagrama abaixo mostra como o código passa pelo GitHub Actions, pelo ECR e pelos ambientes ECS. Ele também evidencia que a mesma imagem validada em staging é promovida para production.
+
+<p align="center">
+  <img src="docs/cicd-flow.png" alt="Fluxo visual de CI/CD, validação, staging e promoção para production" width="100%" />
+</p>
+
+O diagrama de segurança mostra por que existem duas roles IAM. A role Terraform provisiona a plataforma; a role `app-deploy` executa somente as operações necessárias para ECR, ECS e rollback.
+
+<p align="center">
+  <img src="docs/iam-security.png" alt="Separação das roles IAM de Terraform e deploy da aplicação" width="100%" />
+</p>
+
 ### Como uma requisição chega à aplicação
 
 ```text
@@ -356,6 +370,14 @@ Selecionar ambiente
 ```
 
 O rollback não cria uma imagem nova e não depende de uma branch especial. Ele reaplica diretamente uma imagem já publicada e validada no ECR.
+
+### Operação, alertas e rollback em uma única visão
+
+O diagrama abaixo conecta o tráfego do usuário, o monitoramento do ALB, a notificação por SNS e o caminho operacional de rollback.
+
+<p align="center">
+  <img src="docs/operations-flow.png" alt="Fluxo de operação, monitoramento, alertas e rollback" width="100%" />
+</p>
 
 ## Como executar um rollback
 
