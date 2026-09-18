@@ -17,12 +17,6 @@ RUN apk upgrade --no-cache \
               /usr/local/bin/npm \
               /usr/local/bin/npx
 
-# A imagem runtime não instala pacotes; npm/npx não são necessários para
-# executar a aplicação e adicionam dependências transitivas ao scan de segurança.
-# RUN rm -rf /usr/local/lib/node_modules/npm \
-#            /usr/local/bin/npm \
-#            /usr/local/bin/npx
-
 # Usuário não-root (node:20-alpine já traz o usuário "node")
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node package.json server.js ./

@@ -4,6 +4,8 @@ data "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
 }
 
+data "aws_region" "current" {}
+
 resource "aws_iam_role" "github_actions" {
   name = "lacrei-desafio-github-actions"
 
@@ -190,6 +192,72 @@ resource "aws_iam_role_policy" "github_actions" {
           "arn:aws:s3:::${var.terraform_state_bucket}",
           "arn:aws:s3:::${var.terraform_state_bucket}/*"
         ]
+      }
+    ]
+  })
+}
+
+# Role exclusiva para deploy da aplicação. Não possui permissões de Terraform,
+# VPC, CloudFront, WAF, KMS ou acesso ao state remoto.
+resource "aws_iam_role" "app_deploy" {
+  name = "lacrei-desafio-app-deploy"
+
+  assume_role_policy = aws_iam_role.github_actions.assume_role_policy
+  tags               = var.tags
+}
+
+resource "aws_iam_role_policy" "app_deploy" {
+  name = "lacrei-desafio-app-deploy-policy"
+  role = aws_iam_role.app_deploy.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EcrLogin"
+        Effect = "Allow"
+        Action = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        Sid    = "EcrApplicationRepository"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:BatchGetImage",
+          "ecr:CompleteLayerUpload",
+          "ecr:DescribeImages",
+          "ecr:InitiateLayerUpload",
+          "ecr:PutImage",
+          "ecr:UploadLayerPart"
+        ]
+        Resource = "arn:aws:ecr:${data.aws_region.current.name}:${var.account_id}:repository/devops-app"
+      },
+      {
+        Sid    = "EcsDeployment"
+        Effect = "Allow"
+        Action = [
+          "ecs:DescribeClusters",
+          "ecs:DescribeServices",
+          "ecs:DescribeTaskDefinition",
+          "ecs:RegisterTaskDefinition",
+          "ecs:UpdateService"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid      = "PassOnlyApplicationRolesToEcs"
+        Effect   = "Allow"
+        Action   = "iam:PassRole"
+        Resource = [
+          "arn:aws:iam::${var.account_id}:role/lacrei-desafio-devops-app-staging-exec-role",
+          "arn:aws:iam::${var.account_id}:role/lacrei-desafio-devops-app-production-exec-role"
+        ]
+        Condition = {
+          StringEquals = {
+            "iam:PassedToService" = "ecs-tasks.amazonaws.com"
+          }
+        }
       }
     ]
   })

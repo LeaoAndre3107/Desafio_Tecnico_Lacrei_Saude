@@ -45,3 +45,8 @@ output "devops_production_image_tag" {
 output "github_actions_role_arn" {
   value = module.github_oidc.role_arn
 }
+
+output "github_actions_app_deploy_role_arn" {
+  description = "ARN da role de menor privilégio para o deploy da aplicação"
+  value       = module.github_oidc.app_deploy_role_arn
+}
