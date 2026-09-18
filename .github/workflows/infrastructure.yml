@@ -1,0 +1,112 @@
+name: Infrastructure Terraform
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Terraform/**"
+      - ".github/workflows/infrastructure.yml"
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Aplicar o plano Terraform aprovado"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  TF_VERSION: "1.15.7"
+
+jobs:
+  plan:
+    name: Validate and plan Terraform
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Format and validate Terraform
+        working-directory: Terraform
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false
+          terraform validate
+
+      - name: Scan Terraform configuration
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: Terraform
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init with remote state
+        working-directory: Terraform
+        run: terraform init
+
+      - name: Terraform plan
+        working-directory: Terraform
+        env:
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+          TF_VAR_devops_staging_image_tag: ${{ vars.STAGING_IMAGE_TAG }}
+          TF_VAR_devops_production_image_tag: ${{ vars.PRODUCTION_IMAGE_TAG }}
+        run: terraform plan -out=tfplan
+
+      - name: Upload Terraform plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ github.sha }}
+          path: Terraform/tfplan
+          retention-days: 7
+
+  apply:
+    name: Apply approved Terraform plan
+    if: github.event_name == 'workflow_dispatch' && inputs.apply == true
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: infrastructure-production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init
+        working-directory: Terraform
+        run: terraform init
+
+      - name: Download approved plan
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan-${{ github.sha }}
+          path: Terraform
+
+      - name: Terraform apply
+        working-directory: Terraform
+        run: terraform apply -auto-approve tfplan

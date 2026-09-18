@@ -1,0 +1,88 @@
+name: Rollback DevOps App
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente do rollback"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      image_tag:
+        description: "SHA imutável da imagem existente no ECR"
+        required: true
+        type: string
+      confirm:
+        description: "Digite ROLLBACK para confirmar a operação"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: "905542450009"
+  ECR_REPOSITORY: devops-app
+  ECS_CLUSTER: lacrei-desafio-cluster
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Validate confirmation
+        if: inputs.confirm != 'ROLLBACK'
+        run: |
+          echo "Confirmation must be exactly ROLLBACK."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via restricted OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set environment resources
+        id: target
+        run: |
+          if [ "${{ inputs.environment }}" = "production" ]; then
+            echo "service=lacrei-desafio-devops-app-production" >> "$GITHUB_OUTPUT"
+            echo "family=lacrei-desafio-devops-app-production" >> "$GITHUB_OUTPUT"
+            echo "url=${{ vars.PRODUCTION_URL }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "service=lacrei-desafio-devops-app-staging" >> "$GITHUB_OUTPUT"
+            echo "family=lacrei-desafio-devops-app-staging" >> "$GITHUB_OUTPUT"
+            echo "url=${{ vars.STAGING_URL }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify immutable image exists
+        run: |
+          if ! [[ "${{ inputs.image_tag }}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "image_tag must be a 40-character Git SHA."
+            exit 1
+          fi
+          aws ecr describe-images \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag="${{ inputs.image_tag }}"
+
+      - name: Roll back ECS service
+        env:
+          ECS_SERVICE: ${{ steps.target.outputs.service }}
+          TASK_FAMILY: ${{ steps.target.outputs.family }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: ./scripts/rollback-ecs.sh
+
+      - name: Validate rollback
+        run: |
+          for i in $(seq 1 15); do
+            curl -sf "${{ steps.target.outputs.url }}" && exit 0
+            sleep 15
+          done
+          exit 1

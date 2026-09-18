@@ -2,27 +2,28 @@ name: Deploy DevOps App
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - "app/**"
-      - "Terraform/**"
+      - "scripts/**"
       - ".github/workflows/deploy.yml"
+  workflow_dispatch:
 
-# Necessario para os steps de OIDC conseguirem pedir o token de identidade
 permissions:
   id-token: write
   contents: read
 
 env:
   AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: "905542450009"
   ECR_REPOSITORY: devops-app
+  ECS_CLUSTER: lacrei-desafio-cluster
+  STAGING_SERVICE: lacrei-desafio-devops-app-staging
+  PRODUCTION_SERVICE: lacrei-desafio-devops-app-production
+  STAGING_TASK_FAMILY: lacrei-desafio-devops-app-staging
+  PRODUCTION_TASK_FAMILY: lacrei-desafio-devops-app-production
 
 jobs:
-  # Builda uma unica vez, testa o container isoladamente, e deploya em staging.
-  # A imagem validada aqui e a MESMA que sera promovida pra producao no job
-  # seguinte - nunca um rebuild novo, pra garantir que o que passou pelo teste
-  # e exatamente o que vai pro ambiente sensivel.
   deploy-staging:
     runs-on: ubuntu-latest
     outputs:
@@ -31,52 +32,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Terraform para validação
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.15.7"
-
-      - name: Validar Terraform
-        working-directory: Terraform
-        run: |
-          terraform fmt -check -recursive
-          terraform init -backend=false
-          terraform validate
-
-      - name: Scan de segurança do Terraform
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: config
-          scan-ref: Terraform
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-          ignore-unfixed: true
-
-      - name: Configurar credenciais AWS via OIDC
+      - name: Configure AWS credentials via restricted OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login no ECR
+      - name: Login to ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Instalar dependências, executar lint e testes
+      - name: Install dependencies, lint and test
         working-directory: app
         run: |
           npm ci
           npm run lint
           npm test
 
-      - name: Build da imagem
+      - name: Build image
         working-directory: app
         env:
           REGISTRY: ${{ steps.ecr-login.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: docker build -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
+        run: docker build -t "$REGISTRY/$ECR_REPOSITORY:${{ github.sha }}" .
 
-      - name: Scan de segurança da imagem Docker
+      - name: Scan image
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
@@ -84,119 +63,46 @@ jobs:
           exit-code: "1"
           ignore-unfixed: true
 
-      - name: Teste minimo do container (smoke test)
+      - name: Smoke test
         env:
-          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_URI: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
         run: |
-          docker run -d --name smoke-test \
-            -p 3000:3000 \
-            -e APP_PREFIX=/devops/staging \
-            "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-
-          # Espera o container responder antes de validar - nao e o mesmo
-          # ambiente da AWS (Fargate), entao o timing aqui e bem mais rapido
+          docker run -d --name smoke-test -p 3000:3000 \
+            -e APP_PREFIX=/devops/staging "$IMAGE_URI"
+          trap 'docker rm -f smoke-test >/dev/null 2>&1 || true' EXIT
           for i in $(seq 1 10); do
-            if curl -sf "http://localhost:3000/devops/staging/status"; then
-              echo "Container respondeu corretamente"
-              docker stop smoke-test
-              exit 0
-            fi
+            curl -sf http://localhost:3000/devops/staging/status && exit 0
             sleep 2
           done
-
-          echo "Container nao respondeu - abortando antes de publicar"
           docker logs smoke-test
-          docker stop smoke-test
           exit 1
 
-      - name: Verificar se a imagem já existe no ECR
-        id: image-exists
+      - name: Push immutable image if absent
         env:
-            IMAGE_TAG: ${{ github.sha }}
+          IMAGE_URI: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
         run: |
-                if aws ecr describe-images \
-                  --repository-name "$ECR_REPOSITORY" \
-                  --image-ids imageTag="$IMAGE_TAG" \
-                  --region "$AWS_REGION" \
-                  >/dev/null 2>&1; then
-                  echo "exists=true" >> "$GITHUB_OUTPUT"
-                  echo "A imagem $IMAGE_TAG já existe no ECR."
-                else
-                  echo "exists=false" >> "$GITHUB_OUTPUT"
-                  echo "A imagem $IMAGE_TAG ainda não existe no ECR."
-                fi
-
-      - name: Push da imagem (somente se ainda não existir)
-        if: steps.image-exists.outputs.exists != 'true'
-        env:
-            REGISTRY: ${{ steps.ecr-login.outputs.registry }}
-            IMAGE_TAG: ${{ github.sha }}
-        run: docker push "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-
-      - name: Reutilizar imagem existente
-        if: steps.image-exists.outputs.exists == 'true'
-        run: |
-           echo "Push ignorado: a tag ${{ github.sha }} já existe."
-           echo "O pipeline continuará usando a imagem imutável já publicada."
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.15.7"
-
-      - name: Terraform init
-        working-directory: Terraform
-        run: terraform init
-
-      - name: Ler tag atual de producao
-        id: current-prod
-        working-directory: Terraform
-        run: |
-          TAG=$(terraform output -raw devops_production_image_tag 2>/dev/null || echo "")
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
-      - name: Validar secret ALERT_EMAIL
-        env:
-          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
-        run: |
-          if [ -z "$ALERT_EMAIL" ]; then
-            echo "::error::O secret ALERT_EMAIL está vazio ou indisponível neste job."
-            exit 1
+          if aws ecr describe-images --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag="${{ github.sha }}" >/dev/null 2>&1; then
+            echo "Image already exists; reusing immutable SHA tag."
+          else
+            docker push "$IMAGE_URI"
           fi
 
-          if ! printf '%s' "$ALERT_EMAIL" | grep -Eq '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$'; then
-            echo "::error::O secret ALERT_EMAIL não contém um e-mail válido."
-            exit 1
-          fi
-
-          echo "ALERT_EMAIL foi disponibilizado e passou na validação."
-
-      - name: Terraform apply (staging)
-        working-directory: Terraform
+      - name: Update staging ECS service
         env:
-          TF_VAR_devops_staging_image_tag: ${{ github.sha }}
-          TF_VAR_devops_production_image_tag: ${{ steps.current-prod.outputs.tag }}
-          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
-        run: terraform apply -auto-approve
+          ECS_SERVICE: ${{ env.STAGING_SERVICE }}
+          TASK_FAMILY: ${{ env.STAGING_TASK_FAMILY }}
+          IMAGE_URI: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+        run: ./scripts/deploy-ecs.sh
 
-      - name: Validar staging
+      - name: Validate staging
         run: |
-          URL=$(cd Terraform && terraform output -raw devops_staging_url)
           for i in $(seq 1 15); do
-            if curl -sf "$URL"; then
-              echo "Staging OK na tentativa $i"
-              exit 0
-            fi
-            echo "Tentativa $i falhou, aguardando 15s..."
+            curl -sf "${{ vars.STAGING_URL }}" && exit 0
             sleep 15
           done
-          echo "Health check de staging falhou apos todas as tentativas"
           exit 1
 
-  # So roda apos aprovacao manual de um required reviewer configurado no
-  # ambiente "production" (Settings -> Environments no GitHub). Promove a
-  # MESMA tag ja validada em staging - nunca builda de novo.
   promote-to-production:
     needs: deploy-staging
     runs-on: ubuntu-latest
@@ -205,39 +111,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configurar credenciais AWS via OIDC
+      - name: Configure AWS credentials via restricted OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.15.7"
-
-      - name: Terraform init
-        working-directory: Terraform
-        run: terraform init
-
-      - name: Terraform apply (producao)
-        working-directory: Terraform
-        env:
-          TF_VAR_devops_staging_image_tag: ${{ needs.deploy-staging.outputs.image_tag }}
-          TF_VAR_devops_production_image_tag: ${{ needs.deploy-staging.outputs.image_tag }}
-          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
-        run: terraform apply -auto-approve
-
-      - name: Validar producao
+      - name: Verify validated image exists
         run: |
-          URL=$(cd Terraform && terraform output -raw devops_production_url)
+          aws ecr describe-images \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag="${{ needs.deploy-staging.outputs.image_tag }}"
+
+      - name: Update production ECS service with same SHA
+        env:
+          ECS_SERVICE: ${{ env.PRODUCTION_SERVICE }}
+          TASK_FAMILY: ${{ env.PRODUCTION_TASK_FAMILY }}
+          IMAGE_URI: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ needs.deploy-staging.outputs.image_tag }}
+        run: ./scripts/deploy-ecs.sh
+
+      - name: Validate production
+        run: |
           for i in $(seq 1 15); do
-            if curl -sf "$URL"; then
-              echo "Producao OK na tentativa $i"
-              exit 0
-            fi
-            echo "Tentativa $i falhou, aguardando 15s..."
+            curl -sf "${{ vars.PRODUCTION_URL }}" && exit 0
             sleep 15
           done
-          echo "Health check de producao falhou apos todas as tentativas"
           exit 1

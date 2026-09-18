@@ -30,6 +30,12 @@ variable "github_production_environment" {
   default     = "production"
 }
 
+variable "github_staging_environment" {
+  description = "Nome do GitHub Environment usado pelo workflow manual de rollback de staging"
+  type        = string
+  default     = "staging"
+}
+
 variable "account_id" {
   description = "Account ID da AWS"
   type        = string
