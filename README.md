@@ -468,6 +468,10 @@ Esse é um procedimento emergencial separado do workflow oficial. Depois dele, v
 
 ## Monitoramento e alertas
 
+O monitoramento acompanha a saúde do caminho entre o ALB e as tasks ECS. O controle principal não é apenas saber se uma task está em execução, mas saber se o target responde ao health check HTTP esperado.
+
+### Métrica monitorada
+
 Existe um alarme por ambiente para a métrica:
 
 ```text
@@ -481,9 +485,76 @@ AWS/ApplicationELB/UnHealthyHostCount
 | Estatística | `Maximum` |
 | Limite | `>= 1` target unhealthy |
 | Dados ausentes | `breaching` |
-| Ação | Publicação no SNS |
+| Entrada em alarme | Publicação no SNS |
+| Retorno a OK | Publicação no SNS |
+
+### Como o health check é calculado
+
+Cada target group usa a rota específica do ambiente:
+
+```text
+staging:    /devops/staging/status
+production: /devops/production/status
+```
+
+O target group considera a resposta saudável quando recebe HTTP `200`:
+
+| Parâmetro | Valor | Interpretação |
+|---|---:|---|
+| Intervalo | 15 segundos | Frequência das verificações do ALB. |
+| Timeout | 5 segundos | Tempo máximo para o target responder. |
+| Healthy threshold | 2 respostas | Respostas necessárias para marcar o target como saudável. |
+| Unhealthy threshold | 3 falhas | Falhas consecutivas para marcar o target como unhealthy. |
+| Matcher | `200` | Somente HTTP 200 é considerado sucesso. |
+
+O target group decide se cada target está saudável. O alarme observa a métrica agregada `UnHealthyHostCount` e notifica quando pelo menos um target permanece unhealthy durante dois períodos de um minuto.
+
+### Dimensões e estados do alarme
+
+O Terraform restringe cada alarme ao ALB e ao target group do ambiente correspondente:
+
+```text
+Namespace:  AWS/ApplicationELB
+Metric:     UnHealthyHostCount
+Statistic:  Maximum
+Dimension:  LoadBalancer = ALB do projeto
+Dimension:  TargetGroup  = target group de staging ou production
+```
+
+| Estado | Significado | Ação recomendada |
+|---|---|---|
+| `OK` | Nenhum target está unhealthy na janela avaliada. | Continuar monitorando. |
+| `ALARM` | Pelo menos um target unhealthy em dois períodos consecutivos. | Investigar ECS, task, logs e health check; considerar rollback se a versão recém-publicada for a causa. |
+| `INSUFFICIENT_DATA` | Não há datapoints suficientes ou a métrica não está disponível. | Verificar target group, tasks, ALB e publicação da métrica. |
+
+`treat_missing_data = "breaching"` torna a configuração mais conservadora: a ausência de métrica não é tratada como uma situação segura. O alarme possui `alarm_actions` e `ok_actions` apontando para o mesmo SNS, portanto o e-mail informa tanto a entrada em `ALARM` quanto o retorno a `OK`.
 
 O tópico SNS é criptografado com uma CMK dedicada. A subscription de e-mail foi confirmada e recebeu notificação de mudança de estado.
+
+### O que está e não está sendo medido
+
+| Sinal | Situação | Observação |
+|---|---:|---|
+| Targets unhealthy do ALB | Configurado | É o sinal usado pelos alarmes de staging e production. |
+| Health check HTTP | Configurado | Usa `/status` e exige HTTP 200. |
+| Logs da aplicação | Configurado | Tasks enviam logs para CloudWatch Logs. |
+| Estado estável do ECS no deploy | Configurado | Os scripts aguardam `services-stable`. |
+| CPU da task | Não é alarme configurado | Não deve ser apresentada como métrica alarmada neste projeto. |
+| Memória da task | Não é alarme configurado | Pode ser adicionada em um cenário de capacidade ou autoscaling. |
+| Latência do ALB/CloudFront | Não é alarme configurado | O health check confirma disponibilidade, não uma meta de latência. |
+
+### Procedimento de investigação de um alerta
+
+Quando o e-mail informar `ALARM`, siga esta ordem:
+
+1. Identifique o ambiente no nome do alarme.
+2. Consulte o estado e o motivo do alarme.
+3. Consulte os targets do target group e identifique os targets unhealthy.
+4. Verifique o estado das tasks ECS e a última task definition.
+5. Consulte os logs da aplicação no CloudWatch Logs.
+6. Teste o endpoint público do ambiente.
+7. Compare o horário do alerta com o último deploy.
+8. Se a falha estiver relacionada à versão recém-publicada, execute o rollback por SHA e valide novamente.
 
 Consultar os alarmes:
 
@@ -492,6 +563,38 @@ AWS_PROFILE=lacrei-desafio aws cloudwatch describe-alarms \
   --alarm-name-prefix lacrei-desafio \
   --region us-east-1 \
   --query 'MetricAlarms[*].[AlarmName,StateValue,StateReason]' \
+  --output table
+```
+
+Consultar os targets do ALB:
+
+```bash
+AWS_PROFILE=lacrei-desafio aws elbv2 describe-target-health \
+  --target-group-arn <TARGET_GROUP_ARN> \
+  --region us-east-1 \
+  --query 'TargetHealthDescriptions[*].[Target.Id,TargetHealth.State,TargetHealth.Reason,TargetHealth.Description]' \
+  --output table
+```
+
+Consultar o estado dos serviços ECS:
+
+```bash
+AWS_PROFILE=lacrei-desafio aws ecs describe-services \
+  --cluster lacrei-desafio-cluster \
+  --services lacrei-desafio-devops-app-staging lacrei-desafio-devops-app-production \
+  --region us-east-1 \
+  --query 'services[*].[serviceName,desiredCount,runningCount,pendingCount,deployments[*].status]' \
+  --output table
+```
+
+Consultar os eventos recentes de um serviço:
+
+```bash
+AWS_PROFILE=lacrei-desafio aws ecs describe-services \
+  --cluster lacrei-desafio-cluster \
+  --services lacrei-desafio-devops-app-staging \
+  --region us-east-1 \
+  --query 'services[0].events[0:10].[createdAt,message]' \
   --output table
 ```
 
