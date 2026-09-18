@@ -214,9 +214,9 @@ resource "aws_iam_role_policy" "app_deploy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "EcrLogin"
-        Effect = "Allow"
-        Action = ["ecr:GetAuthorizationToken"]
+        Sid      = "EcrLogin"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
         Resource = "*"
       },
       {
@@ -246,9 +246,9 @@ resource "aws_iam_role_policy" "app_deploy" {
         Resource = "*"
       },
       {
-        Sid      = "PassOnlyApplicationRolesToEcs"
-        Effect   = "Allow"
-        Action   = "iam:PassRole"
+        Sid    = "PassOnlyApplicationRolesToEcs"
+        Effect = "Allow"
+        Action = "iam:PassRole"
         Resource = [
           "arn:aws:iam::${var.account_id}:role/lacrei-desafio-devops-app-staging-exec-role",
           "arn:aws:iam::${var.account_id}:role/lacrei-desafio-devops-app-production-exec-role"
