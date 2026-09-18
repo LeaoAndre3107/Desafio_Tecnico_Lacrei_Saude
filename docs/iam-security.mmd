@@ -1,0 +1,32 @@
+flowchart TB
+    G[GitHub Actions]
+    O[OIDC token temporário]
+    G --> O
+    O --> T[Role Terraform]
+    O --> D[Role app-deploy]
+
+    T --> T1[Terraform state S3]
+    T --> T2[VPC e subnets]
+    T --> T3[ECS e ALB]
+    T --> T4[CloudFront WAF KMS SNS]
+    T --> T5[IAM e PassRole controlado]
+
+    D --> D1[ECR login e leitura]
+    D --> D2[ECR push condicional]
+    D --> D3[ECS task definition]
+    D --> D4[ECS update service]
+    D --> D5[PassRole somente roles ECS app]
+
+    D -. Bloqueado .-> X[Sem Terraform state]
+    D -. Bloqueado .-> Y[Sem VPC CloudFront WAF KMS]
+
+    classDef root fill:#0f172a,stroke:#38bdf8,color:#f8fafc,stroke-width:3px
+    classDef role fill:#eff6ff,stroke:#3b82f6,color:#1e3a8a,stroke-width:2px
+    classDef infra fill:#fff7ed,stroke:#f97316,color:#7c2d12,stroke-width:2px
+    classDef deploy fill:#f0fdf4,stroke:#22c55e,color:#14532d,stroke-width:2px
+    classDef blocked fill:#fff1f2,stroke:#f43f5e,color:#881337,stroke-width:2px
+    class G,O root
+    class T,D role
+    class T1,T2,T3,T4,T5 infra
+    class D1,D2,D3,D4,D5 deploy
+    class X,Y blocked

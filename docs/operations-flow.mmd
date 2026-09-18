@@ -1,0 +1,26 @@
+flowchart TB
+    U[Usuário] --> CF[CloudFront HTTPS]
+    CF --> ALB[Application Load Balancer]
+    ALB --> S[ECS staging]
+    ALB --> P[ECS production: 2 tasks]
+    ALB -. UnHealthyHostCount .-> CW[CloudWatch Alarm]
+    CW --> SNS[SNS criptografado com CMK]
+    SNS --> E[E-mail confirmado]
+
+    R[Operador] --> W[Rollback workflow]
+    W --> V[Confirmar ROLLBACK]
+    V --> I[Validar SHA de 40 caracteres]
+    I --> ECR[ECR: imagem existente]
+    ECR --> TD[Nova task definition]
+    TD --> ECS[Atualizar serviço ECS]
+    ECS --> HC[Health-check]
+    HC --> OK[Rollback validado]
+
+    classDef edge fill:#ecfeff,stroke:#06b6d4,color:#164e63,stroke-width:2px
+    classDef compute fill:#f0fdf4,stroke:#22c55e,color:#14532d,stroke-width:2px
+    classDef monitor fill:#fff1f2,stroke:#f43f5e,color:#881337,stroke-width:2px
+    classDef rollback fill:#f5f3ff,stroke:#8b5cf6,color:#4c1d95,stroke-width:2px
+    class U,CF,ALB edge
+    class S,P compute
+    class CW,SNS,E monitor
+    class R,W,V,I,ECR,TD,ECS,HC,OK rollback
